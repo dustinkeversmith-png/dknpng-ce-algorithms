@@ -1,0 +1,110 @@
+{
+  "problems": [
+    {
+      "id": "two-sum-basic",
+      "kind": "algorithm",
+      "domain": "arrays",
+      "title": "Two Sum",
+      "description": "Given an array of integers and a target, return indices of two numbers that add up to the target.",
+      "input.spec": { "nums": "Array[Int]", "target": "Int" },
+      "output.spec": "Array[Int] length 2",
+      "constraints": ["Exactly one answer", "Do not reuse an index", "Expected O(n) time"],
+      "examples": [{ "input": { "nums": [2, 7, 11, 15], "target": 9 }, "output": [0, 1] }],
+      "complexity.target": { "time": "O(n)", "space": "O(n)" }
+    },
+    {
+      "id": "valid-parentheses",
+      "kind": "algorithm",
+      "domain": "stack",
+      "title": "Valid Parentheses",
+      "description": "Determine whether brackets are closed in the correct order.",
+      "input.spec": { "s": "String containing (), {}, []" },
+      "output.spec": "Boolean",
+      "constraints": ["Only bracket characters appear", "Nested brackets must close in reverse order"],
+      "examples": [{ "input": "()[]{}", "output": true }, { "input": "(]", "output": false }]
+    },
+    {
+      "id": "search-insert-position",
+      "kind": "algorithm",
+      "domain": "binary-search",
+      "title": "Search Insert Position",
+      "description": "Return the found index or insertion position for a target in a sorted array.",
+      "input.spec": { "nums": "Sorted Array[Int]", "target": "Int" },
+      "output.spec": "Int index",
+      "constraints": ["Expected O(log n)", "Return lower-bound insertion index"],
+      "examples": [{ "input": { "nums": [1, 3, 5, 6], "target": 2 }, "output": 1 }]
+    },
+    {
+      "id": "merge-intervals",
+      "kind": "algorithm",
+      "domain": "intervals",
+      "title": "Merge Intervals",
+      "description": "Merge all overlapping intervals.",
+      "input.spec": { "intervals": "Array[[Int, Int]]" },
+      "output.spec": "Array[[Int, Int]] non-overlapping",
+      "constraints": ["Intervals may be unsorted", "Expected O(n log n)"],
+      "examples": [{ "input": [[1, 3], [2, 6], [8, 10]], "output": [[1, 6], [8, 10]] }]
+    },
+    {
+      "id": "spiral-matrix",
+      "kind": "algorithm",
+      "domain": "matrix",
+      "title": "Spiral Matrix Traversal",
+      "description": "Return matrix elements in spiral order.",
+      "input.spec": { "matrix": "Array[Array[Int]]" },
+      "output.spec": "Array[Int]",
+      "constraints": ["Visit every element exactly once", "Support rectangular matrices"]
+    },
+    {
+      "id": "lru-cache",
+      "kind": "data-structure",
+      "domain": "cache",
+      "title": "LRU Cache",
+      "description": "Design a cache with O(1) get and put that evicts least recently used entries.",
+      "input.spec": { "constructor": "LRUCache(capacity)", "get": "get(key)", "put": "put(key,value)" },
+      "output.spec": "Operation results",
+      "constraints": ["capacity >= 1", "get and put must be O(1)"]
+    },
+    {
+      "id": "course-schedule",
+      "kind": "algorithm",
+      "domain": "graphs",
+      "title": "Course Schedule",
+      "description": "Determine whether all courses can be completed given prerequisites.",
+      "input.spec": { "numCourses": "Int", "prerequisites": "Array[[course, prerequisite]]" },
+      "output.spec": "Boolean",
+      "constraints": ["Cycle means impossible", "Expected O(V + E)"]
+    },
+    {
+      "id": "parse-expression-ast",
+      "kind": "parser",
+      "domain": "expressions",
+      "title": "Parse Arithmetic Expression Into AST",
+      "description": "Parse arithmetic expression strings into an AST respecting precedence and parentheses.",
+      "input.spec": { "expression": "String" },
+      "output.spec": "Expression AST",
+      "constraints": ["Multiplication binds tighter than addition", "Parentheses override precedence"]
+    },
+    {
+      "id": "async-job-scheduler",
+      "kind": "systems-design-small",
+      "domain": "scheduling",
+      "title": "Async Job Scheduler",
+      "description": "Schedule delayed jobs and support cancellation.",
+      "input.spec": { "schedule": "schedule(id, delayMs, job)", "cancel": "cancel(id)" },
+      "output.spec": "Jobs execute after delay unless canceled",
+      "constraints": ["Multiple jobs may be scheduled", "Cancellation prevents future execution"]
+    },
+    {
+      "id": "rename-symbol-project",
+      "kind": "code-transformation",
+      "domain": "refactoring",
+      "title": "Rename Symbol Across Project",
+      "description": "Rename all semantic references to a symbol without changing unrelated text.",
+      "input.spec": { "workspace": "Project files", "symbolLocation": "file plus range", "newName": "String" },
+      "output.spec": "Patch set",
+      "constraints": ["Respect scope and shadowing", "Do not blindly replace comments or strings"],
+      "artifacts": { "expected.patch.kind": { "kind": "patch-plan", "values": { "format": "edit-list" } } }
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+Todo
+1. Brain storm an architecture for the application
+
+	Set up all of the architectural parts for their pattern and scala feature assignment focus.
+	
+	Get some finalization details in here.
+
+2. Set up a queue to use all unique scala features inside of the application
+
+	Finish research on the scala features
+
+3. Set up a queue to use all data patterns for the structure in the application.
+
+	Alright interesting
+
+4. Collect all of the core ideas about the software and test the hypothesis instead of building the system outright
+
+
+
+Practicing Design Patterns
+https://refactoring.guru/design-patterns
+Intent: {problem, solution}
+Motivation : {problem, solution
+STructure : {classes showing each part of the pattern}
+Code Example : Example of the pattern
+
+Books:
+Christopher Alexander in A Pattern Language: Towns, Buildings, Construction
+Erich Gamma, John Vlissides, Ralph Johnson, and Richard Helm. In 1994, they published Design Patterns: Elements of Reusable Object-Oriented Software

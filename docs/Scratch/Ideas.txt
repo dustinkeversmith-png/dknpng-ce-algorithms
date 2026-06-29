@@ -1,0 +1,72 @@
+
+Input Problem / Code / Hypothesis / Goal
+Parsing and Mock Data
+
+( Parse/Generate 100 different computer programming problems and convert them into problem contexts )
+
+( Assemble different strategies and test using the strategies in conjuction with the execution system to retrieve an output ) 
+
+
+# Problem Space Definition
+
+	Develop these modules
+
+abstract reasoning, symbolic search, strategy composition, missing-info handling.
+
+# Unknown detection
+
+
+
+
+# Quantum Formulation/Simulation Testing
+Circuit Design
+Backed By # Strategy Development
+
+
+# Quantum Problem Space
+
+
+
+
+quantum circuits in scala (build able?)
+
+A better architecture is “classical problem model → quantum-suitable formulation → circuit / annealing / variational algorithm / simulator.”
+
+
+Simulation modes include:
+statevector simulation
+density matrix simulation
+tensor network simulation
+stabilizer simulation
+noisy hardware simulation
+shot-based sampling simulation
+
+
+So your Quantum Simulation Engine should support:
+
+small exact simulation
+large approximate simulation
+noisy simulation
+symbolic circuit analysis
+cost estimation without full simulation
+backend-specific transpilation
+
+Quantum circuits are good at representing:
+
+binary decision variables
+combinatorial optimization
+constraint satisfaction
+search spaces
+Hamiltonian/energy minimization problems
+probabilistic amplitudes
+linear algebra transformations
+
+Problem Space Matrix
+  → binary / discrete variables
+  → constraints
+  → objective function
+  → quantum formulation
+  → circuit / annealing / variational algorithm
+  
+  
+  

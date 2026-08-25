@@ -1,8 +1,0 @@
-Why is adding and removing facts something that would be a part of this process or important?
-
-It should really be more like the problem context describes one problem when really it almost like it represents the problem space
-
-So it seems like operation is the smallest unit but for example the BasicSearchOperation realistically shouldnt be a strategy like the smallest would be like set index here, look one over etc
-
-Or like do a loop or something a good stress test really would be using this context can you end up asking find a search algorithm which meets some speed constraint and like for example you might be binary search or like it adds a sort strategy or something
-

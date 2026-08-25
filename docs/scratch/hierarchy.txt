@@ -1,0 +1,156 @@
+# Problem
+ 
+ Problem Spaces:
+ ? What is a problem space and what is a good way to describe them programatically
+ 
+ 
+	State Space:
+	 ? What is this ?
+	 
+	 Raw / Ambient State Space ($\mathcal{U}$): The set of all values expressible by your types (e.g., any Vec<i32>, any memory buffer, or any node ID in a graph).
+	 
+	  {Sets}...
+	 
+	 Valid State Space ($\mathcal{S} \subseteq \mathcal{U}$): The subset of configurations that satisfy your structural invariants (e.g., an array of length $N$ containing a valid permutation of $0 \dots N-1$).
+	 
+	  {Subset/Generator Functions for The Sets}
+	 
+	State:
+	 complete snapshot of domain variables at an instant.
+
+ Role: Formal specifciation of what needs to be solved
+ ? How can we formalize this best?
+ 
+  P <State Space, Initial State Envelope, Domain Invariants, Goal Predicate, Objective / Cost Functional>
+ 
+ Goal States: What are some good examples of these?
+	Exact/Deterministc Match :- s == target
+	Predicate/Measurement :- res(s) < rank(A)
+ 
+	(a + b) deterministic vs measurement function?
+	Find a P such that ? How would you measure or formulate this programatically?
+ 
+ 
+ Objective functions: What are some good examples of these
+  Path Cost: J(P) = sum
+  Error / Residual
+  Resource Cost:
+ 
+ Invariants/Constraints: What are some examples of these?
+ 
+	Domain Invariants: det(M) != 0
+	State Constraints: all v in dist?
+	
+	(A.something != () ) something ? 
+	Inequality? dist < something? or mins?
+ 
+ 
+ Algebraic Operations: Problem decomposition ($\oplus$), constraint conjunction ($\wedge$), problem relaxation/restriction, and goal intersection.
+ 
+ 
+# Strategy
+
+ "Macroscopic traversal pattern over the problem space"
+ "Declares how to divide and search"
+	Divide & Conquery, Greedy / Best-First
+	? What are some examples when the strategy isn't about searching?
+
+ Role: High-level algorithmic paradigm selection and policy formation (how to approach it).
+  ( Having a large collection of high level paradigms to like compose is good? )
+  
+ Policy Rule:
+  Partiion something here
+  "What does this mean does this like come with the strategy?"
+ 
+ Evaluation Policy Function: 
+  ? satisfies (gu) is etc etc??
+  
+ Strategy Rule:
+  Always Select X
+  
+ ? How does this interfere when developing the operational topology?
+	Doesn't conflict but acts like a parameterized graph macro / subgraph template generator
+	
+	(Strategy) -> (Subgraph Template, Partition Node, Loop / Recurse Controller) -> (Operational Node)
+	
+	Policy Rule: The structural decision rule inside the template (e.g., "If matrix size $> 64$, apply 2D recursive tiling; else dispatch to micro-kernel").
+	
+	Evaluation Policy Function ($f(u) = g(u) + h(u)$): A heuristic node embedded in the strategy template that ranks which operational subgraph to fire next.
+  
+
+ 
+ Elements: Algorithmic patterns (e.g., Divide & Conquer, Dynamic Programming, Greedy, Branch & Bound, Search heuristics).
+ 
+ Operations: 
+ Strategy branching, fallback chaining, heuristic combinations, and policy composition.
+ 
+	"sub-block multiplation strategy chained with standard scalar multiplation"
+ 
+ Focus: Determines the macroscopic method to navigate the problem space without detailing exact state transitions.
+ ? What does this mean
+ 
+ 
+(This solver uses exact state transitions at the smallest operational level including indexing behaviors, incrementation, conditional loops but I want strategies to act as a template wrapping a nodal operational subset)
+
+How does this change how strategies work where strategies all have a topological representation of operations to be used on the data?
+
+ 
+
+# Operational Algebra
+
+
+ "typed verified step relation Op: in -> out with pre-conditions and post condtiions"
+  preconditions (state)
+  apply (state)
+  inverse (state)
+
+ Transformation rules (valid actions) on input ? whats a good way to detail these?
+  
+ 
+ 
+ 
+ Algebraic Operations: Inverses, commutativity checks, idempotent reductions, and algebraic closure under valid actions.
+ 
+	Inverses: $\text{Push}(x) \circ \text{Pop}() = \text{id}$ (enables undo/backtracking).
+	
+	Commutativity: If $\text{Op}_A$ and $\text{Op}_B$ access disjoint memory/state, $\text{Op}_A \circ \text{Op}_B = \text{Op}_B \circ \text{Op}_A$ (enables automatic parallelization).
+	
+	Idempotence: $\text{MarkVisited}(v) \circ \text{MarkVisited}(v) = \text{MarkVisited}(v)$ (enables redundant step elimination).
+ 
+ Focus: Defines the grammar of atomic actions that can manipulate domain states safely.
+
+# Domain Specific Primitives
+ ?state transitions, step relations
+ 
+  (Abstract) ->
+	Relax Edge, Swap, SplitNode, RotateLeft
+
+# Execution/Hardware Primitives (Concrete)
+
+	Load, FMA, AtomicAdd 
+ 
+  "atomic transformation registers local memory?"
+  (Add, Load, Etc) ? (Increment) ?
+
+# Composition Algebra
+ 
+ Role: Structural combinations of operations into coherent, complex workflows (how actions assemble).
+ 
+  "Assemble atomic operations into micro-kernels and macro-loops using composition operators" (sequential, parallel, reduction combinator
+
+ Core Elements: Pipelines, parallel branches, conditional routings, monadic bindings, and higher-order combinators.
+ 
+ Algebraic Operations: Sequential composition ($\circ$ or $>>=$), parallel joins ($\otimes$), choice/alternative ($\mid$), and loop folding.
+ 
+ Focus: Connects atomic operations into larger, reusable graphs and control-flow pipelines while preserving formal properties (e.g., associativity, identity).
+ 
+ (Does this replace my idea of having operations in a graph like structure?)
+ 
+	A Directed Acyclic Graph (DAG) or Dataflow Graph of operations is simply an expression in Composition Algebra.
+	
+		(o, >>=) Sequential
+		() Parallel -> SPlit [Join/Reduce]
+		(|) Choice -> Condition
+		Loop/Fold : OpBody -> Condition
+ 
+ 

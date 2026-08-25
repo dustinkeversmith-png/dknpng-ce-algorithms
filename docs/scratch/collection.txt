@@ -1,0 +1,40 @@
+Search Space:
+ All possible configurations of the initial state, connected to all combinations of the operator nodes.
+
+? So if you narrow down the search space finding the solution gets easier right, called pruning a search space.
+
+	Eliminating Reduant Operators (Inversed Moves)
+	The Rule: If the last action was R (Right face clockwise), do not allow the next action to be R' (Right face counter-clockwise).
+	
+	Communicative Move Pruning (Order Independence)
+	
+	Bound Pruning (Best solution so far and kill off worse paths)
+	
+	Heuristic Pruning
+
+
+State:
+
+ Initial State: Where the user or system starts out before any action
+  (Matrix filled with scrambled numbers representing a shuffled cube)
+ State: A snapshot of the system at a specific moment containing all necessary data (e.g., coordinates on a board, variable values).
+ Operators (Actions): The legal rules or moves that transition the system from one state to another.
+  (Flips Twists), (Chess Move)
+  "These are solutions to singular state problems"
+  "Im more interested in problem spaces to solve any given initial state variants"
+  "The effect of the operator is state dependent then."
+  "Called pruning the search space"
+ Transition Model: The logic defining what happens when an operator is applied to a specific state.
+  
+ 
+ Exploration: Search Tree (initial state-> branches to change state)
+  (Blind), (Heuristic)
+ 
+
+Problem Space:
+ 
+ Objective functions: The specific friction, emotional distress, or inefficiencies people experience
+ Invariants/Constraints: The environment, rules, and limitations surrounding the users.
+ Goal States: What a true resolution would look like for the user, detached from any specific tool.
+ 
+ Problem Space: Focuses on discovery, listening, asking "why," and mapping user struggles without mentioning features.

@@ -1,6 +1,22 @@
 Search Space:
  All possible configurations of the initial state, connected to all combinations of the operator nodes.
 
+ Raw / Ambient State Space ($\mathcal{U}$): The set of all values expressible by your types (e.g., any Vec<i32>, any memory buffer, or any node ID in a graph).
+ 
+  Ambient Space (Univserse[S])
+   - Validation/Well-Formedness
+   - Sampling/Enumeration
+   - Shape/Metadata
+   
+  To Move from the Ambient Space to the Valid State Space we Apply Invariants
+   To the universe.
+   
+  Invariant Constrained Generator (G_I) -> Directly yields s IN S
+  
+  
+ 	 Valid State Space ($\mathcal{S} \subseteq \mathcal{U}$): The subset of configurations that satisfy your structural invariants (e.g., an array of length $N$ containing a valid permutation of $0 \dots N-1$).
+	 
+
 ? So if you narrow down the search space finding the solution gets easier right, called pruning a search space.
 
 	Eliminating Reduant Operators (Inversed Moves)

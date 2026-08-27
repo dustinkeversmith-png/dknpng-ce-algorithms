@@ -3,7 +3,9 @@
  Problem Spaces:
   
   P <State Space, Initial State Envelope, Domain Invariants, Goal Predicate, Objective / Cost Functional>
- 
+  
+
+
  Goal States: What are some good examples of these?
 	Exact/Deterministc Match :- s == target
 	Predicate/Measurement :- res(s) < rank(A)
@@ -32,6 +34,10 @@
 # Strategy
 
  "Macroscopic traversal pattern over the problem space"
+  ? Can it have some internal like predicates, or goals/measurements
+  ? It is often described by partitioning strategy, so what other domains do strategies normally take a roll in ?
+  ? Conjuction of strategies for different parts of course.
+  
  "Declares how to divide and search"
 	Divide & Conquery, Greedy / Best-First
 	? What are some examples when the strategy isn't about searching?

@@ -1,16 +1,63 @@
+# Evaluation and nested operator context
+When executing a operator we can use our map
 
 
-TypeRegistry[ValueType.type].byte_size
-TypeRegistry[ValueType.type].operators
-
-ValueType:
- type: String
+1. Test the base value system without operations
+2. Test using fast parse and test the actual language for parsing but not building the nodal system yet
 
 
-a. Where does the ast fit into this system, in defining functionals
+Review the entire functional folder and sub scala files including the comments which describe the system best.
+
+# Dont erase any of my comments
+# Try not to change any of the syntax, function names or desired behavior goals
+
+Finish developing the value test so that it passes the desired behavior
+
+Finish parser.scala to be the simplistic C++ like language without type name specifciations and semicolons as specified
+
+
+sbt "testOnly com.example.MyTestSuite"
+
+1.
+ValueTypeNormalize
+// This parses a fields input into uniform string to ValueTypes, although I dont like actually having a BaseValueType entire new class for this IMO.
+
+2. Why do we need a ValueTypeImpl class, I dont understand, just one ValueType class will do or one object with a constructor would be easier for me to understand
+
+3. Equals is going to need to be an actual algorithm, like iterating through the map, matching the fieldNames and ValueType.t .... not this silly one liner && && && && thing, since I dont know if fields == that.fields is just like measuring the pointer, the names, the values or doing the preferred way.
+
+4. This hashCode is basically ass, and doesn't really specify how the shape, fields and strings are being encoded before the hash, can you please be more explicit in the code you write please.
+
+5. Yeah if we can just combine all that ImplShit into just one class, not this weird apply apply logic...
+
+6. Instead of normalizing the strings, is it possible to just add like a constructor with a string on the ValueType?
+
+7. You also just removed the test entirely from value.scala, I dont know why you did that?
+
+8. Why are we not storing the name of itself, the shape and the fields in the actual class?
+
+9. The layout algorithm looks terrible and doesn't actually recurse to collect the correct layout information, it needs to test if its a basetype, then it will accumulate the sizes and size information from the type_registry.
+
+10. I've gone ahead and fixed alot of these terrible coding behaviors you were doing, make it point to not do this again.
+
+a. No applies, no stupid duplicated impl functions, one class always and forever with a constructor and members.
+
+b. No object apply trash, one class only forever.
+
+c. No element counts, thats stupid
+
+d. Code the members like they are members mutating the internal state like any other programming language please
+
+100.0
+ no random private shit, everyhting public.
+ 
+100.0
+ use actual naming if you are going to create extra function names and classes, which I dont want you to do, I want tyou to keep the code contained in the code areas I create... esepcially if I go out of my way to create them...
+ 
+ALWWAYS USE THIS AND SET INSIDE 
+
+NO EXTRA BASE VALUETYPE MOTHER FUCKER, PERMANENT CHECKS ALWAYS
 
 
 
-1. Find a lightweight grammar to parser feature
 
-go through and denote all of the specific algorithms to implement.

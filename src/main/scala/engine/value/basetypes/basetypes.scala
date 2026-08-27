@@ -1,3 +1,8 @@
+import scala.collection.mutable.HashMap
+
+// Base type operations intentionally remain outside the first value-system milestone.
+trait BaseTypeOperator
+
 // Register of all base type sizes
 object TypeRegistry:
 
@@ -19,6 +24,12 @@ object TypeRegistry:
     size: Long,
     operator: BaseTypeOperator
   ): Unit =
+    require(name.nonEmpty, "A base type name cannot be empty")
+    require(size > 0, "A base type must occupy at least one byte")
     typeSizes(name) = size
     operators(name) = operator
 
+  def byteSize(name: String): Long =
+    typeSizes.getOrElse(name, throw new NoSuchElementException(s"Unknown base type: $name"))
+
+  def contains(name: String): Boolean = typeSizes.contains(name)

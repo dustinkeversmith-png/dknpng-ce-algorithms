@@ -7,7 +7,7 @@ lazy val root = (project in file("."))
     name := "adaptive-problem-space-engine-phase1",
     libraryDependencies ++= Seq(
       "org.scalameta" %% "munit" % "1.0.2" % Test,
-      "com.github.j-mie6" %% "parsley" % "4.5.4"
+      "com.lihaoyi" %% "fastparse" % "3.1.1"
     ),
     scalacOptions ++= Seq(
       "-deprecation",

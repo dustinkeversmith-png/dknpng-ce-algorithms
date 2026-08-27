@@ -1,11 +1,9 @@
 package problem.space
 
-import scala.annotation.unchecked.uncheckedVariance
-
 /**
  * First-class invariant with diagnostic reporting and Boolean combinators.
  */
-case class Invariant[-S](
+case class Invariant[S](
   name: String,
   predicate: Predicate[S],
   violationMessage: S => String = (s: S) => "Violated invariant"
@@ -13,7 +11,7 @@ case class Invariant[-S](
   def holds(s: S): Boolean = predicate(s)
 
   /** Conjunction (∧): Both invariants must hold */
-  def &&(other: Invariant[S @uncheckedVariance]): Invariant[S] =
+  def &&(other: Invariant[S]): Invariant[S] =
     Invariant(
       s"(${name} ∧ ${other.name})",
       Predicate(s"(${name} ∧ ${other.name})", (s: S) => this.predicate(s) && other.predicate(s)),
@@ -23,7 +21,7 @@ case class Invariant[-S](
     )
 
   /** Disjunction (∨): At least one invariant must hold */
-  def ||(other: Invariant[S @uncheckedVariance]): Invariant[S] =
+  def ||(other: Invariant[S]): Invariant[S] =
     Invariant(
       s"(${name} ∨ ${other.name})",
       Predicate(s"(${name} ∨ ${other.name})", (s: S) => this.predicate(s) || other.predicate(s)),

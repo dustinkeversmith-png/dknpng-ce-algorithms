@@ -1,12 +1,11 @@
 # Problem
  
  Problem Spaces:
-
+ 
  Space:
  
   "defines the data representation, types, constructive generator, and metric bounds"
   
-
   a. To make the invariant guide generation the generator must be a constructive (an inductive grammar /generator algebra)
   
   (Prediction Specification) -> Compiling (Constructive Grammar)
@@ -14,9 +13,6 @@
   contains
   generate
   
-		
-
-
   Constructive Invariants: predicates satisfyed during generation and on the actual elements them selves
   
   Structural Invariants (Internal invariants)

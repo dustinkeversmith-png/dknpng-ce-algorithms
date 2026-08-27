@@ -1,5 +1,9 @@
 package problem.space
 
+// 1. Import the mutable package
+import scala.collection.mutable.HashMap
+
+
 /**
  * Typeclass defining the Ambient / Valid State Space for state type `S`.
  */
@@ -7,37 +11,60 @@ package problem.space
 // 2. SPACE TRAIT (Modular Space Definition Driven by Invariants)
 // =========================================================================
 
+
+
 /**
  * Core typeclass / specification defining an Ambient and Valid State Space.
  */
-trait Space[S]:
+trait Space:
   /** Human-readable description */
   def description: String
 
-  /** Structural shape descriptor (e.g., "Vector[4] of (Interval[0.0, 1.0])") */
-  def shape: String
+  /** Structural shape descriptor eg dimensionality and length which is not a string anymore, an array of integers will suffice, with each describing the length of the dimensions. */
+
+  /** [1] For example when it is a set of singular entities such as real numbers, etc*/
+  def shape: List[Integer]
+
+  
+
+  /** A complete value type descriptor of what kind of objects are stored in here. */
+  def value_type: ValueType
+
 
   /** List of semantic and structural invariants governing this space */
   def invariants: List[Invariant[S]]
 
+  /** List of all semantic invariants associated with this Space eg. "Sum of row elemnts must equal 1.0"*/
+  def semantic_invariants: List[Invariant[S]]
+
+  /** List of all structural invariants associated with this Space eg. in terms of sizes and shapes of the thing and type, columns same size" */
+  def structural_invariants: List[Invariant[S]]
+
+
+  
+
+
+  
+
   /** Constructive generator: guaranteed structurally well-formed */
+  /** Guaranteed to the produced generation satisfies the semantic_invariants and structural invariants and is a part of this space */
   def generate(): S
 
-  /** Optional generator/enumeration for discrete or bounded spaces */
-  def enumerate: LazyList[S] = LazyList.empty
-
   /** Checks if `s` satisfies all space invariants */
-  def contains(s: S): Boolean =
+  def contains(v: V): Boolean =
+
+
+    // Same type structural layout check.
+    // structural and semantic values associated with each sub type or field would also make alot more sense
     invariants.forall(_.holds(s))
 
-  /** Validates `s`, returning diagnostic errors on violation */
-  def validate(s: S): Either[List[String], S] =
-    val errors = invariants.filterNot(_.holds(s)).map(inv => s"[${inv.name}]: ${inv.violationMessage(s)}")
-    if errors.isEmpty then Right(s) else Left(errors)
+  // No validation or anything like that, no errors involved.
 
   // --- Topology & Local Search (New) ---
   /** Local neighborhood perturbation generator */
-  def neighbors(s: S): LazyList[S] = LazyList.empty
+  /** Some kind of topology, possibly simply just a inverse vector similarity on the memory layout for starters as a default */
+  /** Or having some kind of way of navigating the space obviously ints is just +1 % max or something*/
+  def neighbors(v: Value):
 
   /** Distance metric between two states in this space */
   def distance(a: S, b: S): Double = 0.0
@@ -46,23 +73,19 @@ trait Space[S]:
   def project(s: S): S = s
 
   /** Refine this space by attaching an additional invariant */
-  def withInvariant(inv: Invariant[S]): Space[S] = RefinedSpace(this, inv)
-
-/** A refinement that preserves the topology and generators of its parent. */
-final case class RefinedSpace[S](underlying: Space[S], invariant: Invariant[S]) extends Space[S]:
-  def description: String = underlying.description
-  def shape: String = underlying.shape
-  def invariants: List[Invariant[S]] = underlying.invariants :+ invariant
-  def generate(): S =
-    val candidate = underlying.generate()
-    if contains(candidate) then candidate
-    else enumerate.find(contains).getOrElse(
-      throw new IllegalStateException(s"Generator could not satisfy refinement '${invariant.name}'")
-    )
-  override def enumerate: LazyList[S] = underlying.enumerate.filter(contains)
-  override def neighbors(s: S): LazyList[S] = underlying.neighbors(s).filter(contains)
-  override def distance(a: S, b: S): Double = underlying.distance(a, b)
-  override def project(s: S): S =
-    val projected = underlying.project(s)
-    if contains(projected) then projected
-    else enumerate.find(contains).getOrElse(projected)
+  def withInvariant(inv: Invariant[S]): Space[S] =
+    val parent = this
+    new Space[S]:
+      def description = parent.description
+      def shape = parent.shape
+      def invariants = parent.invariants :+ inv
+      def generate() =
+        val candidate = parent.generate()
+        if contains(candidate) then candidate
+        else enumerate.headOption.getOrElse(throw new IllegalStateException(s"Generator could not satisfy refinement '${inv.name}'"))
+      override def enumerate = parent.enumerate.filter(contains)
+      override def neighbors(s: S) = parent.neighbors(s).filter(contains)
+      override def distance(a: S, b: S) = parent.distance(a, b)
+      override def project(s: S) =
+        val candidate = parent.project(s)
+        if contains(candidate) then candidate else enumerate.headOption.getOrElse(candidate)

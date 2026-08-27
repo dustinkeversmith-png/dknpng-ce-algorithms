@@ -1,53 +1,7 @@
 # Problem
  
  Problem Spaces:
- 
- Space:
- 
-  "defines the data representation, types, constructive generator, and metric bounds"
   
-  a. To make the invariant guide generation the generator must be a constructive (an inductive grammar /generator algebra)
-  
-  (Prediction Specification) -> Compiling (Constructive Grammar)
-  
-  contains
-  generate
-  
-  Constructive Invariants: predicates satisfyed during generation and on the actual elements them selves
-  
-  Structural Invariants (Internal invariants)
-   in terms of sizes and shapes of the thing and type, columns same size
-   
-  Refinement/Contract External Invariants
-  
-   Semantic predicates layered on top depending on the specific task. "Sum of row elemnts must equal 1.0"
-   invariants or constraints imposed on the set externally possibly in the state space.
-	 
-  Metric / Distance Function ($d(s_1, s_2) \to \mathbb{R}_{\ge 0}$):
-   Computes distance between two different elements in the space
-  
-  Neighborhood / Mutation Operator ($\mathcal{N}: S \to \text{LazyList}[S]$):
-	Defines the valid local perturbations from a given state without leaving structural bounds (e.g., swapping two elements, perturbing a matrix cell by $\pm \epsilon$).
-
-  Projection / Clamping Operator ($\text{project}: S \to S$):
-	Takes an arbitrary or out-of-bounds state and projects it back onto the nearest valid point in the space (crucial for constrained optimization or repair).
-
-  Dimensionality / Cardinality Bounds:
-	Explicit measure of the space's size: $\vert{}S\vert{}$ for discrete spaces or $\dim(S)$ for continuous spaces.
-	
-  Algebraic Combinators (Products & Direct Sums):
-   Operations to compose spaces together (e.g., $S_1 \times S_2$ via Cartesian product, or $S^N$ via tensor/vector power).
-	
-	  
-	State:
-	 complete snapshot of domain variables at an instant.
-	 
-   State Space:
-    Bundles the space with initial state, and set of operations avaialble on the space to transmission it.
-
- Role: Formal specifciation of what needs to be solved
- ? How can we formalize this best?
- 
   P <State Space, Initial State Envelope, Domain Invariants, Goal Predicate, Objective / Cost Functional>
  
  Goal States: What are some good examples of these?

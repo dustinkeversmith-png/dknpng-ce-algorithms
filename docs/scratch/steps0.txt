@@ -1,0 +1,16 @@
+
+
+TypeRegistry[ValueType.type].byte_size
+TypeRegistry[ValueType.type].operators
+
+ValueType:
+ type: String
+
+
+a. Where does the ast fit into this system, in defining functionals
+
+
+
+1. Find a lightweight grammar to parser feature
+
+go through and denote all of the specific algorithms to implement.

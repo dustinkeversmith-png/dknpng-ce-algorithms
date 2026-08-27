@@ -1,33 +1,44 @@
-Search Space:
- All possible configurations of the initial state, connected to all combinations of the operator nodes.
 
- Raw / Ambient State Space ($\mathcal{U}$): The set of all values expressible by your types (e.g., any Vec<i32>, any memory buffer, or any node ID in a graph).
+Space
+ To make the invariant guide generation the generator must be a constructive (an inductive grammar /generator algebra)
  
-  Ambient Space (Univserse[S])
+ (Prediction Specification) -> Compiling (Constructive Grammar)
+ 
+ Constructive Invariants: predicates satisfyed during generation and on the actual elements them selves
+  
+  Structural Invariants (Internal invariants)
+   in terms of sizes and shapes of the thing and type, columns same size
+   
+  Refinement/Contract External Invariants
+  
+   Semantic predicates layered on top depending on the specific task. "Sum of row elemnts must equal 1.0"
+   invariants or constraints imposed on the set externally possibly in the state space.
+	 
+  Metric / Distance Function ($d(s_1, s_2) \to \mathbb{R}_{\ge 0}$):
+   Computes distance between two different elements in the space
+  
+  Neighborhood / Mutation Operator ($\mathcal{N}: S \to \text{LazyList}[S]$):
+	Defines the valid local perturbations from a given state without leaving structural bounds (e.g., swapping two elements, perturbing a matrix cell by $\pm \epsilon$).
+
+  Projection / Clamping Operator ($\text{project}: S \to S$):
+	Takes an arbitrary or out-of-bounds state and projects it back onto the nearest valid point in the space (crucial for constrained optimization or repair).
+
+  Dimensionality / Cardinality Bounds:
+	Explicit measure of the space's size: $\vert{}S\vert{}$ for discrete spaces or $\dim(S)$ for continuous spaces.
+	
+  Algebraic Combinators (Products & Direct Sums):
+   Operations to compose spaces together (e.g., $S_1 \times S_2$ via Cartesian product, or $S^N$ via tensor/vector power).
+
+Ambient Space<Value> ()
    - Validation/Well-Formedness
-   - Sampling/Enumeration
+   - Invariant Constrained Generator (G_I) -> Directly yields s IN S
+   - The subset of configurations that satisfy your structural invariants (e.g., an array of length $N$ containing a valid permutation of $0 \dots N-1$).
    - Shape/Metadata
    
-  To Move from the Ambient Space to the Valid State Space we Apply Invariants
-   To the universe.
-   
-  Invariant Constrained Generator (G_I) -> Directly yields s IN S
-  
-  
- 	 Valid State Space ($\mathcal{S} \subseteq \mathcal{U}$): The subset of configurations that satisfy your structural invariants (e.g., an array of length $N$ containing a valid permutation of $0 \dots N-1$).
-	 
-
-? So if you narrow down the search space finding the solution gets easier right, called pruning a search space.
-
-	Eliminating Reduant Operators (Inversed Moves)
-	The Rule: If the last action was R (Right face clockwise), do not allow the next action to be R' (Right face counter-clockwise).
-	
-	Communicative Move Pruning (Order Independence)
-	
-	Bound Pruning (Best solution so far and kill off worse paths)
-	
-	Heuristic Pruning
-
+State Space<Ambient Space>
+ - Any additional constraints, overriden operators, invariants. 
+ - Domain limitations
+ The set of all values expressible by your types (e.g., any Vec<i32>, any memory buffer, or any node ID in a graph).
 
 State:
 
@@ -35,6 +46,7 @@ State:
   (Matrix filled with scrambled numbers representing a shuffled cube)
  State: A snapshot of the system at a specific moment containing all necessary data (e.g., coordinates on a board, variable values).
  Operators (Actions): The legal rules or moves that transition the system from one state to another.
+  " Which will be more sore stored in the solution domain. "
   (Flips Twists), (Chess Move)
   "These are solutions to singular state problems"
   "Im more interested in problem spaces to solve any given initial state variants"
@@ -46,6 +58,19 @@ State:
  Exploration: Search Tree (initial state-> branches to change state)
   (Blind), (Heuristic)
  
+
+
+Search Space:
+ This case the search space is a graph of operations or a program on the state which mutates the inital state from the space.
+ 
+Narrowing Down the Search Space:
+ Eliminating Reduant Operators (Inversed Moves)
+ The Rule: If the last action was R (Right face clockwise), do not allow the next action to be R' (Right face counter-clockwise).
+ Communicative Move Pruning (Order Independence)
+ Bound Pruning (Best solution so far and kill off worse paths)
+ Heuristic Pruning
+
+
 
 Problem Space:
  

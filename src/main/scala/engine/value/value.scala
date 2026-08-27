@@ -359,9 +359,85 @@ final class Value(
   //   ensureAllocated()
   //   Iterator.range(0, Value.elementCount(shape)).map(apply)
 
+  // Used to define iteration travel in directions, such as next, prev, or arbitrary directions for neighbor hood searches in the dimensionality space
+  def index_dimension(indices: Int*): FieldIndex =
+    require(indices.length == this.shape.length, s"Expected ${this.shape.length} dimension indices but received ${indices.length}")
+
+    var dimensionPath = ""
+    var dimensionIndex = 0
+    while dimensionIndex < indices.length do
+      val coordinate = indices(dimensionIndex)
+      require(
+        coordinate >= 0 && coordinate < this.shape(dimensionIndex),
+        s"Dimension $dimensionIndex index $coordinate is outside 0 until ${this.shape(dimensionIndex)}"
+      )
+      dimensionPath += s"[$coordinate]"
+      dimensionIndex += 1
+
+    this.index.getOrElse(
+      dimensionPath,
+      throw new NoSuchElementException(s"Dimension path has not been indexed: $dimensionPath")
+    )
+
+  def iterate_dimension(): Iterator[FieldIndex] =
+    this.index.toVector
+      .filter { case (path, _) => path.matches("""(\[\d+\])+""") }
+      .sortBy { case (path, fieldIndex) => (fieldIndex.offset, path) }
+      .map { case (_, fieldIndex) => fieldIndex }
+      .iterator
+
   // // Used to aid in iterating through the different sub types such as fields within an actual value.
   // def iterate_value(): Iterator[MemoryRef] =
   //   iterate_dimension().flatMap(_.iterator())
+
+  // Used to aid in iterating through the different sub types such as fields within an actual value.
+  def index_value(indices: Seq[Int], fieldNames: String*): Vector[FieldIndex] =
+    require(indices.length == this.shape.length, s"Expected ${this.shape.length} dimension indices but received ${indices.length}")
+
+    var dimensionPath = ""
+    var dimensionIndex = 0
+    while dimensionIndex < indices.length do
+      val coordinate = indices(dimensionIndex)
+      require(
+        coordinate >= 0 && coordinate < this.shape(dimensionIndex),
+        s"Dimension $dimensionIndex index $coordinate is outside 0 until ${this.shape(dimensionIndex)}"
+      )
+      dimensionPath += s"[$coordinate]"
+      dimensionIndex += 1
+
+    var selectedFields: Vector[FieldIndex] = Vector.empty
+    var fieldNameIndex = 0
+    while fieldNameIndex < fieldNames.length do
+      val fieldName = fieldNames(fieldNameIndex)
+      val fieldPath =
+        if dimensionPath.isEmpty then fieldName
+        else s"$dimensionPath.$fieldName"
+
+      selectedFields = selectedFields :+ this.index.getOrElse(
+        fieldPath,
+        throw new NoSuchElementException(s"Value field has not been indexed: $fieldPath")
+      )
+      fieldNameIndex += 1
+
+    selectedFields
+
+  def iterate_value(fieldNames: String*): Iterator[FieldIndex] =
+    val indexedFields = this.index.toVector
+      .filter { case (path, _) => !path.matches("""(\[\d+\])+""") }
+      .filter { case (path, _) =>
+        if fieldNames.isEmpty then true
+        else
+          var matches = false
+          var fieldNameIndex = 0
+          while fieldNameIndex < fieldNames.length && !matches do
+            val fieldName = fieldNames(fieldNameIndex)
+            matches = path == fieldName || path.endsWith(s".$fieldName")
+            fieldNameIndex += 1
+          matches
+      }
+      .sortBy { case (path, fieldIndex) => (fieldIndex.offset, path) }
+
+    indexedFields.map { case (_, fieldIndex) => fieldIndex }.iterator
 
   // So access and iterator can be accessed [1-N][1_N_2] for the initial dimensionality, then it will finally be able to access and iterate each type, by measuring the strides, and recursive strides into the object.
 
@@ -430,6 +506,49 @@ class TypeTests:
 
     assert(particle == sameParticle)
     assert(particle.hashCode() == sameParticle.hashCode())
+
+  def test_multidimensional_shape_and_internal_field_iteration(): Unit =
+    val positionType = new ValueType(
+      "Array",
+      Vector(3),
+      Map("value" -> "int")
+    )
+
+    val this_value_type = new Value(
+      "ParticleGrid",
+      Vector(2, 2, 2, 2),
+      Map(
+        "id" -> "long",
+        "mass" -> "double",
+        "position" -> positionType
+      )
+    )
+
+    this_value_type.index_fields()
+
+    assert(this_value_type.element_size == 28L)
+    assert(this_value_type.total_size == 448L)
+    assert(this_value_type.tails == Vector(224L, 112L, 56L, 28L))
+
+    val selectedDimension = this_value_type.index_dimension(1, 0, 1, 0)
+    assert(selectedDimension.offset == 280L)
+    assert(selectedDimension.length == 28L)
+
+    val selectedFields = this_value_type.index_value(Seq(1, 0, 1, 0), "position", "mass")
+    assert(selectedFields(0).offset == 296L)
+    assert(selectedFields(0).length == 12L)
+    assert(selectedFields(1).offset == 288L)
+    assert(selectedFields(1).length == 8L)
+
+    val allDimensions = this_value_type.iterate_dimension().toVector
+    assert(allDimensions.length == 16)
+    assert(allDimensions.head.offset == 0L)
+    assert(allDimensions.last.offset == 420L)
+
+    val positionAndMass = this_value_type.iterate_value("position", "mass").toVector
+    assert(positionAndMass.length == 32)
+    assert(positionAndMass.head.offset == 8L)
+    assert(positionAndMass.last.offset == 436L)
 
 
 // Then when building a type you can like create a base type, and just append shit to the map, and register base type sizes, and or reuse any base operations on the base types.

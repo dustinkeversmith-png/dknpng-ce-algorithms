@@ -1,19 +1,30 @@
-\
 
 
-trait Functional:
-    Map[string, Value] stack
-    Vector[string: args, operators: "", or like ast type thing but a program ast so it has access to stack or declaritive intermediary values that can be resampled]
+
+trait class FunctionalCompute:
+
+    // A little internal value creation state
+    def vars: Map<String, Values>
+
+    def run(
+        program: FunctionalTree
+        arguments: Map[String, Value]
+    ):
+        // The actual FunctionalTree will have like an array of in order AstTrees parsed from the parser
+        // So we iterate through those, do the evaluation/traversal of the nodes, mutating the arguments internal values, which may more may not trigger a recursive call for a different functional associated with something else but ignore that
+        // Nodes will have like variable names in them, so we can then use the args to associate those of course.
+        // Also the internal vars like temp vars can be created on the vars tree in the program and reused of course.
 
 
-final class Functional(
-  val args: Vector[String],
-  val source: String
-):
+trait class Functional:
 
-  // Parse/compile only once.
-  val program: FunctionalAst =
-    FunctionalCompiler.compile(source)
+  def compile()
+
+  // Identification id of the functional itself.
+  def id: FunctionalId
+
+  // Parse/compile only once and cache the program.
+  val program: FunctionalTree
   
   // Then what about mixed modal operators so maybe it would be
   // Map["Operator"]["ValueTypeA, ValueTypeB, ValueTypeC"]
@@ -23,7 +34,13 @@ final class Functional(
   def execute(
     arguments: Map[String, Value]
   ): Value =
-    program.execute(arguments)
+
+    val: FunctionalCompute
+
+    // Execution algorithm
+    // For each statement in the program the ast will compile and execute mutating the arguments state
+    // But can also create and assign variables onto its own internal stack.
+
 
 
 

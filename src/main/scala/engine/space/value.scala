@@ -2,17 +2,42 @@
 // 1. Import the mutable package
 import scala.collection.mutable.HashMap
 
+// So then I need a parser for the function which I want to be a string kind of or at least some kind of composable functional since the value types are accessible by string in the actual value these can obviously be expressed as intermediary stack, and base operations, assuming some BaseTypeOperator is always defined for the sub type.
+
+trait FunctionalAst:
+    // Then probably each line has its own Ast, it executes mean while mutating the stack
+    // Then moving on, and then pushes that all back into the type maybe?
+    Map[string, Value] stack
+
+trait Functional:
+    Map[string, Value] stack
+    Vector[string: args, operators: "", or like ast type thing but a program ast so it has access to stack or declaritive intermediary values that can be resampled]
+
+
+
 trait BaseTypeOperator:
 
-  def cast(value: Any, targetType: String): Any
+  // Map[String, Functional(Value a, Value b, ... However many values) -> Value] operator_set
 
-  def add(a: Any, b: Any): Any
+  // Then can map independent operator overrides to the operator_set as functions.
 
-  def subtract(a: Any, b: Any): Any
+  ["cast"] = 
+    Functional(
+        // So assuming we know the underlying name of a function say value, we then accept the line seperations, then it goes and executes this with a functional ast
+        "value += other_value * 2.0"
+        "intermediary ="
 
-  def multiply(a: Any, b: Any): Any
+    )
+    
+    (value: Any, targetType: String): Any
 
-  def divide(a: Any, b: Any): Any
+  ["add"](a: Any, b: Any): Any
+
+  ["subtract"](a: Any, b: Any): Any
+
+  ["multiply"](a: Any, b: Any): Any
+
+  ["divide"](a: Any, b: Any): Any
 
 
 // Register of all base type sizes

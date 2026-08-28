@@ -28,15 +28,15 @@ class BaseOperatorTests extends munit.FunSuite:
     pairType.index_fields()
     pairType.allocate()
 
-    pairType("left").operators("=")(4)
-    pairType("right").operators("=")(6)
+    pairType.reference_member("left").operator("=")(baseTypes.result_value("int", 4.0))
+    pairType.reference_member("right").operator("=")(baseTypes.result_value("int", 6.0))
 
     val addedFields = integerOperators.operator(
       "add",
-      Vector(pairType("left"), pairType("right"))
+      Vector(pairType.reference_member("left"), pairType.reference_member("right"))
     )
 
-    assert(addedFields.operators("equals")(10).truth())
+    assert(baseTypes.read_value(addedFields.operator("equals")(baseTypes.result_value("int", 10.0))) == 1.0)
 
-    pairType("left").operators("+=")(pairType("right"))
-    assert(pairType("left").operators("equals")(10).truth())
+    pairType.reference_member("left").operator("+=")(pairType.reference_member("right"))
+    assert(baseTypes.read_value(pairType.reference_member("left").operator("equals")(baseTypes.result_value("int", 10.0))) == 1.0)

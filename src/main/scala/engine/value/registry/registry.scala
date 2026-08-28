@@ -28,8 +28,22 @@ final class TypeRegistry:
 
   def contains(name: String): Boolean = this.sizes.contains(name)
 
-  def operator(name: String, Value: Array[Value] ):
-    
+  def operator(name: String, values: Array[Value]): Value =
+    require(values.nonEmpty, s"Operator '$name' requires at least one Value")
+
+    val baseValue = values(0).base_value()
+    val typeName = baseValue.base_type_name()
+    var valueArguments: Vector[Value] = Vector(baseValue)
+    var argumentIndex = 1
+
+    while argumentIndex < values.length do
+      valueArguments = valueArguments :+ values(argumentIndex)
+      argumentIndex += 1
+
+    this.operators.getOrElse(
+      typeName,
+      throw new NoSuchElementException(s"No operators are registered for type '$typeName'")
+    ).operator(name, valueArguments)
 
   def size(name: String): Long =
     this.sizes.getOrElse(name, throw new NoSuchElementException(s"Unknown base type: $name"))

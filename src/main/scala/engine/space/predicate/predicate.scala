@@ -3,14 +3,14 @@ package problem.space
 /**
  * Named predicate S => Boolean with Boolean combinators.
  */
-case class Predicate[S](name: String, test: S => Boolean):
-  def apply(s: S): Boolean = test(s)
+case class Predicate(name: String, test: Value => Boolean):
+  def apply(s: Value): Boolean = test(s)
 
-  def &&(other: Predicate[S]): Predicate[S] =
+  def &&(other: Predicate): Predicate =
     Predicate(s"(${name} ∧ ${other.name})", s => this.test(s) && other.test(s))
 
-  def ||(other: Predicate[S]): Predicate[S] =
+  def ||(other: Predicate): Predicate =
     Predicate(s"(${name} ∨ ${other.name})", s => this.test(s) || other.test(s))
 
-  def unary_! : Predicate[S] =
+  def unary_! : Predicate =
     Predicate(s"¬(${name})", s => !this.test(s))

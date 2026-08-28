@@ -1,5 +1,6 @@
 // 1. Import the mutable package
 import scala.collection.mutable.HashMap
+import scala.collection.mutable.LinkedHashMap
 import java.nio.ByteBuffer
 
 
@@ -10,8 +11,10 @@ class ValueType(
   var name: String,
   var t: String,
   var shape: Vector[Int],
-  var fields: Map[String, ValueType]
+  var fields: LinkedHashMap[String, ValueType]
 ):
+
+  var registry: TypeRegistry = new BaseTypes().registerAll()
 
   // Just kind of base line requirements here, hard coded right in. Thats fine I guess..
   require(this.name.nonEmpty, "A value type name cannot be empty")
@@ -33,22 +36,22 @@ class ValueType(
 
   // Use this fucking constructor right here, so it recurses back down until its not a bean mobile.
   def this(name: String, baseType: String) =
-    this(name, baseType, Vector.empty, Map.empty)
+    this(name, baseType, Vector.empty, LinkedHashMap.empty)
     require(baseType.nonEmpty, "A base type name cannot be empty")
    // this name, set, this fields
    // This shit might just actually be something, you mother fucker. If you fuck this up I am going to kill you.
 
-  def this(name: String, fields: Map[String, String | ValueType]) =
-    this(name, name, Vector.empty, Map.empty)
+  def this(name: String, fields: scala.collection.Map[String, String | ValueType]) =
+    this(name, name, Vector.empty, LinkedHashMap.empty)
     this.parse_fields(fields)
 
-  def this(name: String, shape: Vector[Int], fields: Map[String, String | ValueType]) =
-    this(name, name, shape, Map.empty)
+  def this(name: String, shape: Vector[Int], fields: scala.collection.Map[String, String | ValueType]) =
+    this(name, name, shape, LinkedHashMap.empty)
     this.parse_fields(fields)
 
   // This parses a fields input into uniform string to ValueTypes, although I dont like actually having a BaseValueType entire new class for this IMO.
-  def parse_fields(fields: Map[String, String | ValueType]): Map[String, ValueType] =
-    var parsedFields: Map[String, ValueType] = Map.empty
+  def parse_fields(fields: scala.collection.Map[String, String | ValueType]): LinkedHashMap[String, ValueType] =
+    val parsedFields: LinkedHashMap[String, ValueType] = LinkedHashMap.empty
     val fieldNames = fields.keys.toVector
     var fieldIndex = 0
 
@@ -58,9 +61,9 @@ class ValueType(
 
       fieldType match
         case baseType: String =>
-          parsedFields = parsedFields.updated(fieldName, new ValueType(fieldName, baseType))
+          parsedFields(fieldName) = new ValueType(fieldName, baseType)
         case valueType: ValueType =>
-          parsedFields = parsedFields.updated(fieldName, valueType)
+          parsedFields(fieldName) = valueType
 
       fieldIndex += 1
 
@@ -69,37 +72,34 @@ class ValueType(
 
 
 
-  override def equals(other: ValueType): Boolean =
-    other match
-      case that: ValueType =>
-        if this.name != that.name then return false
-        if this.t != that.t then return false
-        if this.shape.length != that.shape.length then return false
+  def equals(other: ValueType): Boolean =
+        if this.name != other.name then return false
+        if this.t != other.t then return false
+        if this.shape.length != other.shape.length then return false
 
         var shapeIndex = 0
         while shapeIndex < this.shape.length do
-          if this.shape(shapeIndex) != that.shape(shapeIndex) then return false
+          if this.shape(shapeIndex) != other.shape(shapeIndex) then return false
           shapeIndex += 1
 
-        if this.fields.size != that.fields.size then return false
+        if this.fields.size != other.fields.size then return false
 
         val thisFieldNames = this.fields.keys.toVector.sorted
-        val thatFieldNames = that.fields.keys.toVector.sorted
+        val otherFieldNames = other.fields.keys.toVector.sorted
         var fieldIndex = 0
 
         while fieldIndex < thisFieldNames.length do
           val thisFieldName = thisFieldNames(fieldIndex)
-          val thatFieldName = thatFieldNames(fieldIndex)
-          if thisFieldName != thatFieldName then return false
+          val otherFieldName = otherFieldNames(fieldIndex)
+          if thisFieldName != otherFieldName then return false
 
           val thisFieldType = this.fields(thisFieldName)
-          val thatFieldType = that.fields(thatFieldName)
-          if !thisFieldType.equals(thatFieldType) then return false
+          val otherFieldType = other.fields(otherFieldName)
+          if !thisFieldType.equals(otherFieldType) then return false
 
           fieldIndex += 1
 
         true
-      case _ => false
 
   override def hashCode(): Int =
     // The hash is encoded explicitly in this order: name characters, canonical type characters,
@@ -172,7 +172,6 @@ final case class FieldIndex(
 
 
 trait MemoryRef:
-  def valueType: ValueType
   def offset: Long
   def length: Long
   def read(): Array[Byte]
@@ -182,16 +181,13 @@ trait MemoryRef:
 // The actual data container for the value type description.
 // NO STUPID CONSTRUCTOR CLASSES ONE CLASS ONLY
 final class Value(
-  name: String,
-  shape: Vector[Int],
-  fields: Map[String, String | ValueType]
-) extends ValueType(name, shape, fields):
-
-  // Every Value carries the registry which measures and operates on its base leaves.
-  var registry: TypeRegistry = new BaseTypes().registerAll()
+  valueName: String,
+  valueShape: Vector[Int],
+  valueFields: scala.collection.Map[String, String | ValueType]
+) extends ValueType(valueName, valueShape, valueFields):
 
   // THIS IS A INDEX NOT DETAILS
-  var index: Map[String, FieldIndex] = Map.empty
+  var index: LinkedHashMap[String, FieldIndex] = LinkedHashMap.empty
 
   /// STANDARD MOTHER FUCKING CONSTRUCTOR
 
@@ -231,19 +227,20 @@ final class Value(
 
   // Collects details such as a map of the field names to their internal offsets and lengths in the memory
   // Creates a self size map for ease of allocation and use, and total size for contiguous iteration.
-  def index_fields(): Map[String, FieldIndex] =
+  def index_fields(): LinkedHashMap[String, FieldIndex] =
     // DONT PUT NO EXTRA FUCKING FUNCTION NAMES IF I PUT A FUNCTION NAME DONT GO AROUND IT.
 
     // RIGHT HERE ALSO ADD UP ALL OF THE SIZES AND SHIT for the Total Size DICK SUCKER
     // AND ALSO YOU HAVE TO POPULATE BASED ON THE SHAPE DID YOU NOT UNDERSTAND THE DIMENSIONS COCK SUCKER?
     // MEASURE ONCE AND POPULATE THE INDEX FOR ALL THE DIMENSION INDEXES TO.
 
-    this.index = Map.empty
+    this.index.clear()
 
     def measure(valueType: ValueType): Long =
       var measuredElementSize = 0L
 
       if valueType.fields.isEmpty then
+        valueType.registry = this.registry
         measuredElementSize = this.registry.size(valueType.t)
       else
         val fieldNames = valueType.fields.keys.toVector
@@ -278,10 +275,7 @@ final class Value(
               if elementPath.isEmpty then fieldName
               else s"$elementPath.$fieldName"
 
-            this.index = this.index.updated(
-              fieldPath,
-              FieldIndex(nextOffset, fieldType.byte_size, fieldType)
-            )
+            this.index(fieldPath) = FieldIndex(nextOffset, fieldType.byte_size, fieldType)
 
             if fieldType.fields.nonEmpty || fieldType.shape.nonEmpty then
               populate(fieldType, nextOffset, fieldPath)
@@ -299,10 +293,7 @@ final class Value(
           val completePath = path + dimensionPath
 
           if dimensionPath.nonEmpty then
-            this.index = this.index.updated(
-              completePath,
-              FieldIndex(elementOffset, valueType.element_size, valueType)
-            )
+            this.index(completePath) = FieldIndex(elementOffset, valueType.element_size, valueType)
 
           populateElement(elementOffset, completePath)
         else
@@ -385,12 +376,24 @@ final class Value(
 
   
 
-  def iterate_dimension(indices: Int[], offset: Int): Iterator[FieldIndex] =
-    this.index.toVector
-      .filter { case (path, _) => path.matches("""(\[\d+\])+""") }
-      .sortBy { case (path, fieldIndex) => (fieldIndex.offset, path) }
-      .map { case (_, fieldIndex) => fieldIndex }
-      .iterator
+  def iterate_dimension(indices: Array[Int], offset: Int): Iterator[Value] =
+    require(indices.length == this.shape.length, s"Expected ${this.shape.length} dimension indices but received ${indices.length}")
+    require(offset >= 0 && offset < this.shape.length, s"Unknown dimension offset: $offset")
+
+    var dimensionIndex = 0
+    while dimensionIndex < indices.length do
+      require(indices(dimensionIndex) >= 0 && indices(dimensionIndex) < this.shape(dimensionIndex), s"Dimension $dimensionIndex index ${indices(dimensionIndex)} is outside 0 until ${this.shape(dimensionIndex)}")
+      dimensionIndex += 1
+
+    val values = Vector.newBuilder[Value]
+    var coordinate = indices(offset)
+    while coordinate < this.shape(offset) do
+      val currentIndices = indices.clone()
+      currentIndices(offset) = coordinate
+      values += this.reference_element(currentIndices)
+      coordinate += 1
+
+    values.result().iterator
 
   // // Used to aid in iterating through the different sub types such as fields within an actual value.
   // def iterate_value(): Iterator[MemoryRef] =
@@ -469,11 +472,15 @@ final class Value(
     this.reference(memberName)
 
   // Returns an indexed Value view while keeping the parent memory as the backing storage.
-  def reference_element(elementIndex: Int[]): Value =
+  def reference_element(elementIndex: Array[Int]): Value =
     if this.index.isEmpty then this.index_fields()
     if this.memory.isEmpty then this.allocate()
 
-    val directPath = s"[$elementIndex]"
+    var directPath = ""
+    var dimensionIndex = 0
+    while dimensionIndex < elementIndex.length do
+      directPath += s"[${elementIndex(dimensionIndex)}]"
+      dimensionIndex += 1
     if this.index.contains(directPath) then this.reference(directPath)
     else
       val indexedPaths = this.index.keys.toVector
@@ -495,11 +502,11 @@ final class Value(
     referencedValue.total_size = field.length
     referencedValue.element_size = field.valueType.element_size
     referencedValue.byte_size = field.length
-    referencedValue.index = Map.empty
+    referencedValue.index.clear()
 
     if field.valueType.fields.isEmpty && field.valueType.shape.isEmpty then
       referencedValue.shape = Vector.empty
-      referencedValue.index = Map("value" -> field)
+      referencedValue.index("value") = field
     else
       if path.endsWith("]") then referencedValue.shape = Vector.empty
 
@@ -515,7 +522,7 @@ final class Value(
           relativePath = indexedPath.substring(path.length)
 
         if relativePath.nonEmpty then
-          referencedValue.index = referencedValue.index.updated(relativePath, this.index(indexedPath))
+          referencedValue.index(relativePath) = this.index(indexedPath)
 
         indexedPathIndex += 1
 
@@ -524,7 +531,7 @@ final class Value(
   def base_value(): Value =
     if this.registry.contains(this.t) && this.index.contains("value") then this
     else if this.index.contains("value") && this.index("value").valueType.fields.isEmpty then this.reference("value")
-    else if this.fields.size == 1 then this(this.fields.keys.head)
+    else if this.fields.size == 1 then this.reference_member(this.fields.keys.head)
     else throw new IllegalArgumentException(s"Value '${this.name}' does not identify one base value")
 
   def base_type_name(): String =
@@ -541,12 +548,33 @@ final class Value(
       .sortBy { case (path, field) => (field.offset, path) }
       .map { case (path, _) => path }
 
+  def iterator(): Iterator[Value] =
+    if this.index.isEmpty then this.index_fields()
+    if this.memory.isEmpty then this.allocate()
+
+    if this.shape.nonEmpty then
+      this.index.toVector
+        .filter { case (path, _) => path.matches("""(\[\d+\])+""") }
+        .sortBy { case (path, fieldIndex) => (fieldIndex.offset, path) }
+        .map { case (path, _) => this.reference(path) }
+        .iterator
+    else
+      this.fields.keysIterator
+        .filter(fieldName => this.index.contains(fieldName))
+        .map(fieldName => this.reference_member(fieldName))
+
+  def value(): Value = this
+
   def operator(name: String)(arguments: Value*): Value =
     var valueArguments: Vector[Value] = Vector.empty
     var argumentIndex = 0
 
+    valueArguments = valueArguments :+ this
+    while argumentIndex < arguments.length do
+      valueArguments = valueArguments :+ arguments(argumentIndex)
+      argumentIndex += 1
 
-    this.registry.operators(name, arguments)
+    this.registry.operator(name, valueArguments.toArray)
 
     
 

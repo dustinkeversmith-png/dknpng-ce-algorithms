@@ -16,38 +16,25 @@ import scala.collection.mutable.HashMap
 /**
  * Core typeclass / specification defining an Ambient and Valid State Space.
  */
-trait Space[S]:
+trait Space:
   /** Human-readable description */
   def description: String
 
   /** Structural shape descriptor eg dimensionality and length which is not a string anymore, an array of integers will suffice, with each describing the length of the dimensions. */
 
-  /** [1] For example when it is a set of singular entities such as real numbers, etc*/
-  def shape: String
-  // This shape will mirror the Value description
-
-  
 
   /** A complete value type descriptor of what kind of objects are stored in here. */
-  def value_type: Any = description
+  def value_type: ValueType
 
   // This will be valueType description
 
 
-  /** List of semantic and structural invariants governing this space */
-  def invariants: List[Invariant[S]]
 
   /** List of all semantic invariants associated with this Space eg. "Sum of row elemnts must equal 1.0"*/
-  def semantic_invariants: List[Invariant[S]] = invariants
+  def semantic_invariants: List[Invariant]
 
   /** List of all structural invariants associated with this Space eg. in terms of sizes and shapes of the thing and type, columns same size" */
-  def structural_invariants: List[Invariant[S]] = List.empty
-
-
-  
-
-
-  
+  def structural_invariants: List[Invariant]
 
   /** Constructive generator: guaranteed structurally well-formed */
   /** Guaranteed to the produced generation satisfies the semantic_invariants and structural invariants and is a part of this space */

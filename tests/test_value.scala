@@ -21,9 +21,10 @@ class TypeTests extends munit.FunSuite:
     value.registry = registry
     value.index_fields()
     value.allocate()
-    value.operators("=")(6.0)
+    value.operator("=")(baseTypes.result_value("double", 6.0))
 
-    assert(value.operators("+")(4.0).operators("equals")(10.0).truth())
+    val ten = value.operator("+")(baseTypes.result_value("double", 4.0))
+    assert(baseTypes.read_value(ten.operator("equals")(baseTypes.result_value("double", 10.0))) == 1.0)
 
     val leftStructure = new Value(
       "leftStructure",
@@ -33,8 +34,8 @@ class TypeTests extends munit.FunSuite:
     leftStructure.registry = registry
     leftStructure.index_fields()
     leftStructure.allocate()
-    leftStructure("x").operators("=")(2.5)
-    leftStructure("count").operators("=")(3)
+    leftStructure.reference_member("x").operator("=")(baseTypes.result_value("double", 2.5))
+    leftStructure.reference_member("count").operator("=")(baseTypes.result_value("int", 3.0))
 
     val rightStructure = new Value(
       "rightStructure",
@@ -44,12 +45,13 @@ class TypeTests extends munit.FunSuite:
     rightStructure.registry = registry
     rightStructure.index_fields()
     rightStructure.allocate()
-    rightStructure("x").operators("=")(1.5)
-    rightStructure("count").operators("=")(4)
+    rightStructure.reference_member("x").operator("=")(baseTypes.result_value("double", 1.5))
+    rightStructure.reference_member("count").operator("=")(baseTypes.result_value("int", 4.0))
 
-    val combinedStructure = leftStructure.operators("+")(rightStructure)
-    assert(combinedStructure("x").operators("equals")(4.0).truth())
-    assert(combinedStructure("count").operators("equals")(7).truth())
+    val combinedX = leftStructure.reference_member("x").operator("+")(rightStructure.reference_member("x"))
+    val combinedCount = leftStructure.reference_member("count").operator("+")(rightStructure.reference_member("count"))
+    assert(baseTypes.read_value(combinedX.operator("equals")(baseTypes.result_value("double", 4.0))) == 1.0)
+    assert(baseTypes.read_value(combinedCount.operator("equals")(baseTypes.result_value("int", 7.0))) == 1.0)
 
   test("type creation and base functional iteration type and size natures"):
     val positionType = new ValueType(
@@ -91,7 +93,7 @@ class TypeTests extends munit.FunSuite:
       )
     )
 
-    assert(particle == sameParticle)
+    assert(particle.equals(sameParticle))
     assert(particle.hashCode() == sameParticle.hashCode())
 
   test("multidimensional shape and internal field iteration"):
@@ -120,27 +122,60 @@ class TypeTests extends munit.FunSuite:
       Map("value" -> "int")
     )
 
+    val baseValues = new BaseTypes()
+    val valueRegistry = baseValues.registerAll()
+    position.registry = valueRegistry
+    this_value_type.registry = valueRegistry
+    position.index_fields()
+    position.allocate()
+    this_value_type.index_fields()
+    this_value_type.allocate()
+
     // Basic indexing and assignment
-    position[0] = 1;
-    position[1] = 2;
-    position[2] = 3;
+    // position[0] = 1;
+    // position[1] = 2;
+    // position[2] = 3;
+    position.reference_element(Array(0)).operator("=")(baseValues.result_value("int", 1.0))
+    position.reference_element(Array(1)).operator("=")(baseValues.result_value("int", 2.0))
+    position.reference_element(Array(2)).operator("=")(baseValues.result_value("int", 3.0))
 
     // Multidimensional iteration
     val iter = position.iterator();
     // This should return the value as the value type on next etc 
+    val firstPosition: Value = iter.next().value()
+    val secondPosition: Value = iter.next().value()
+    val thirdPosition: Value = iter.next().value()
+    assert(baseValues.read_value(firstPosition) == 1.0)
+    assert(baseValues.read_value(secondPosition) == 2.0)
+    assert(baseValues.read_value(thirdPosition) == 3.0)
 
     // Multidimensional and nested assignment
-    this_value_type[0,0,0,0]["id"] = 2;
-    this_value_type[0,0,0,0]["mass"] = 3.0;
+    // this_value_type[0,0,0,0]["id"] = 2;
+    // this_value_type[0,0,0,0]["mass"] = 3.0;
+    val selectedValue = this_value_type.reference_element(Array(0, 0, 0, 0))
+    selectedValue.reference_member("id").operator("=")(baseValues.result_value("long", 2.0))
+    selectedValue.reference_member("mass").operator("=")(baseValues.result_value("double", 3.0))
+    assert(selectedValue.shape.isEmpty)
+    assert(selectedValue.fields.nonEmpty)
+    assert(selectedValue.fields.contains("id"))
+    assert(selectedValue.fields.contains("mass"))
+    assert(selectedValue.index.contains("id"))
+    assert(selectedValue.index.contains("mass"))
+    assert(selectedValue.fields.keysIterator.hasNext)
+    assert(selectedValue.fields.keysIterator.filter(fieldName => selectedValue.index.contains(fieldName)).hasNext)
 
     // Iterating values example
-    val iter =  this_value_type[0,0,0,0].iterator()
+    // val iter =  this_value_type[0,0,0,0].iterator()
+    val selectedIterator = selectedValue.iterator()
+    assert(selectedIterator.hasNext)
     // .value resolves the iterator and will return the nest type as a Value 
-    Value id = iter.value() 
+    // Value id = iter.value()
+    val id: Value = selectedIterator.next().value()
     // Return values like this ensures that we never have any types we just use the specified types.
-    Value mass = iter.next().value()
-
-    this_value_type.index_fields()
+    // Value mass = iter.next().value()
+    val mass: Value = selectedIterator.next().value()
+    assert(baseValues.read_value(id) == 2.0)
+    assert(baseValues.read_value(mass) == 3.0)
 
     assert(this_value_type.element_size == 28L)
     assert(this_value_type.total_size == 448L)
@@ -156,10 +191,10 @@ class TypeTests extends munit.FunSuite:
     assert(selectedFields(1).offset == 288L)
     assert(selectedFields(1).length == 8L)
 
-    val allDimensions = this_value_type.iterate_dimension().toVector
-    assert(allDimensions.length == 16)
-    assert(allDimensions.head.offset == 0L)
-    assert(allDimensions.last.offset == 420L)
+    val selectedDimensionValues = this_value_type.iterate_dimension(Array(0, 0, 0, 0), 3).toVector
+    assert(selectedDimensionValues.length == 2)
+    assert(selectedDimensionValues.head.index("id").offset == 0L)
+    assert(selectedDimensionValues.last.index("id").offset == 28L)
 
     val positionAndMass = this_value_type.iterate_value("position", "mass").toVector
     assert(positionAndMass.length == 32)

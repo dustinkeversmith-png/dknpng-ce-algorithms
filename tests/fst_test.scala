@@ -49,12 +49,15 @@ class FunctionalSemanticTreeIntegrationTests extends munit.FunSuite:
         val semanticTree = new FunctionalSemanticTree(args)
         val program = semanticTree.build(syntaxTree)
 
-        args("a").operators("=")(3.0)
-        args("b").operators("=")(4.0)
-        args("limit").operators("=")(8.0)
-        args("enabled").operators("=")(1.toByte)
-        args("output").operators("=")(-100.0)
-        mutableParticle("position")(1)("value").operators("=")(99.0)
+        val baseValues = new BaseTypes()
+        baseValues.registry = semanticTree.registry
+
+        args("a").operator("=")(baseValues.result_value("double", 3.0))
+        args("b").operator("=")(baseValues.result_value("double", 4.0))
+        args("limit").operator("=")(baseValues.result_value("double", 8.0))
+        args("enabled").operator("=")(baseValues.result_value("byte", 1.0))
+        args("output").operator("=")(baseValues.result_value("double", -100.0))
+        mutableParticle.reference_member("position").reference_element(Array(1)).reference_member("value").operator("=")(baseValues.result_value("double", 99.0))
 
 
         // Asserting program correctness.
@@ -77,9 +80,10 @@ class FunctionalSemanticTreeIntegrationTests extends munit.FunSuite:
 
         val returned = evaluator.evaluate()
 
-        assert(args("output").operators("equals")(14.0).truth())
-        assert(args("particle")(1).operators("equals")(14.0).truth())
-        assert(semanticTree.stack("result").operators("equals")(14.0).truth())
+        val expected = baseValues.result_value("double", 14.0)
+        assert(baseValues.read_value(args("output").operator("equals")(expected)) == 1.0)
+        assert(baseValues.read_value(args("particle").reference_member("position").reference_element(Array(1)).reference_member("value").operator("equals")(expected)) == 1.0)
+        assert(baseValues.read_value(semanticTree.stack("result").operator("equals")(expected)) == 1.0)
 
 
     test("semantic tree can own an empty stack or receive an existing stack"):

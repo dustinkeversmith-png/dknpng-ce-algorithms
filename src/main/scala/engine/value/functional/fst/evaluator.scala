@@ -14,6 +14,8 @@ final class Evaluator(var tree: FunctionalSemanticTree) extends Evalulator:
 
     var returned: Option[Value] = None
     var has_returned: Boolean = false
+    var baseTypes: BaseTypes = new BaseTypes()
+    baseTypes.registry = this.tree.registry
 
     def evaluate(): Option[Value] =
         this.returned = None
@@ -61,52 +63,53 @@ final class Evaluator(var tree: FunctionalSemanticTree) extends Evalulator:
                 // MemberName = node.memberName
                 // MemberAccess = args[VariableName][MemberName], from here we have the internal value where we can then set values using the Value Class as it is normally done.
                 // Member access keeps returning a Value view backed by the original argument memory.
-                this.evaluate_node(value)(member)
+                this.evaluate_node(value).reference_member(member)
             case IndexAccessNode(value, index) =>
                 // Fill in the gaps here
                 // Index access uses the current hierarchical Value view, not a flattened resolver.
-                this.evaluate_node(value)(this.evaluate_node(index).integer())
+                val elementIndex = this.baseTypes.read_value(this.evaluate_node(index)).toInt
+                this.evaluate_node(value).reference_element(Array(elementIndex))
             case NumericLiteralNode(value) =>
                 val literalValue = new Value("literal", Vector.empty, Map("value" -> "double"))
                 literalValue.registry = this.tree.registry
                 literalValue.index_fields()
                 literalValue.allocate()
-                literalValue.set_number(value)
+                this.baseTypes.write_value(literalValue, value)
             case StringLiteralNode(_) =>
                 throw new UnsupportedOperationException("String Value registration is not available in the base type pack")
             case UnaryOperatorNode(operator, value) =>
                 val evaluatedValue = this.evaluate_node(value)
                 operator match
-                    case "+" => evaluatedValue.operators("unary+")()
-                    case "-" => evaluatedValue.operators("unary-")()
-                    case "!" => evaluatedValue.operators("!")()
+                    case "+" => evaluatedValue.operator("unary+")()
+                    case "-" => evaluatedValue.operator("unary-")()
+                    case "!" => evaluatedValue.operator("!")()
                     case _ => throw new IllegalArgumentException(s"Unknown unary operator: $operator")
             case BinaryOperatorNode(left, operator, right) =>
                 val leftValue = this.evaluate_node(left)
 
                 // These preserve short-circuit behavior while the actual operation remains a Value operator.
-                if operator == "&&" && !leftValue.truth() then leftValue
-                else if operator == "||" && leftValue.truth() then leftValue
-                else leftValue.operators(operator)(this.evaluate_node(right))
+                if operator == "&&" && this.baseTypes.read_value(leftValue) == 0.0 then leftValue
+                else if operator == "||" && this.baseTypes.read_value(leftValue) != 0.0 then leftValue
+                else leftValue.operator(operator)(this.evaluate_node(right))
             case TernaryOperatorNode(condition, whenTrue, whenFalse) =>
-                if this.evaluate_node(condition).truth() then this.evaluate_node(whenTrue)
+                if this.baseTypes.read_value(this.evaluate_node(condition)) != 0.0 then this.evaluate_node(whenTrue)
                 else this.evaluate_node(whenFalse)
             case AssignmentOperatorNode(target, operator, assignedValue) =>
                 val targetValue = this.evaluate_node(target)
                 val rightValue = this.evaluate_node(assignedValue)
-                targetValue.operators(operator)(rightValue)
+                targetValue.operator(operator)(rightValue)
             case DeclarationNode(valueType, name, initialValue) =>
                 val stackValue = new Value(name, Vector.empty, Map("value" -> valueType))
                 stackValue.registry = this.tree.registry
                 stackValue.index_fields()
                 stackValue.allocate()
-                initialValue.foreach(value => stackValue.operators("=")(this.evaluate_node(value)))
+                initialValue.foreach(value => stackValue.operator("=")(this.evaluate_node(value)))
                 this.tree.stack(name) = stackValue
                 stackValue
             case BlockNode(statements) =>
                 this.evaluate_block(BlockNode(statements))
             case IfNode(condition, thenBranch, elseBranch) =>
-                if this.evaluate_node(condition).truth() then this.evaluate_block(thenBranch)
+                if this.baseTypes.read_value(this.evaluate_node(condition)) != 0.0 then this.evaluate_block(thenBranch)
                 else
                     elseBranch match
                         case Some(branch) => this.evaluate_block(branch)
@@ -121,7 +124,7 @@ final class Evaluator(var tree: FunctionalSemanticTree) extends Evalulator:
                 evaluatedValue.registry = this.tree.registry
                 evaluatedValue.index_fields()
                 evaluatedValue.allocate()
-                while !this.has_returned && this.evaluate_node(condition).truth() do
+                while !this.has_returned && this.baseTypes.read_value(this.evaluate_node(condition)) != 0.0 do
                     evaluatedValue = this.evaluate_block(body)
                 evaluatedValue
             case ReturnNode(value) =>

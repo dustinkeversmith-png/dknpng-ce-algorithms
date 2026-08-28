@@ -141,28 +141,3 @@ final class Evaluator(var tree: FunctionalSemanticTree) extends Evalulator:
 
     
 
-
-
-   
-
-    def number(value: Any): Double =
-        value match
-            case number: Byte => number.toDouble
-            case number: Short => number.toDouble
-            case number: Int => number.toDouble
-            case number: Long => number.toDouble
-            case number: Float => number.toDouble
-            case number: Double => number
-            case boolean: Boolean => if boolean then 1.0 else 0.0
-            case other => throw new IllegalArgumentException(s"Expected a numeric value but received: $other")
-
-    def boolean(value: Any): Boolean =
-        value match
-            case boolean: Boolean => boolean
-            case number: Byte => number != 0
-            case number: Short => number != 0
-            case number: Int => number != 0
-            case number: Long => number != 0L
-            case number: Float => number != 0.0f
-            case number: Double => number != 0.0
-            case other => throw new IllegalArgumentException(s"Expected a logical value but received: $other")

@@ -118,6 +118,21 @@ I got rid of read and write, dont bring those back.
 
 Youll read and write just using functions defined on the Value for now until we get operators ready.
 
+Also we dont need to convert any values to any numbers or anything like that, we always just use Value
+
+so in the + case for example we assume the value will have a operator 
+
+I also got rid of the weird | lines in front of the statements, I dont want that.
+
+also using the assertEquals functions for now is kind of out of style, it might be best to use our own evaluation which will be the next part I will go over.
+
+youll see the expected syntax changes based on my changes to the fst_test
+
+and also Ill be changing the stac
+
+
+
+
 BaseTypes
  add operator overloads for all base c-style types, start with the TypeRegistry empty and then just add extension builders
  

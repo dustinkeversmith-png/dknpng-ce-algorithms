@@ -5,7 +5,10 @@ import scala.collection.mutable.HashMap
 
 final case class ArgumentMap(arguments: Map[String, String]) // Typename and parameter name.
 
+// name is name of the operation, and arguments is the argument signature
 final case class FunctionalId(name: String, arguments: Map[String, String])
+
+// so that way we can find the matching Functional based on the name of the operator and types of the function signature.
 
 trait ValueOperators:
 

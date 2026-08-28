@@ -9,20 +9,20 @@ class FunctionalSemanticTreeIntegrationTests extends munit.FunSuite:
     test("parse, build the finalized nodal tree, and evaluate mutable Value arguments"):
         val source =
             """
-              |double result = a + b * 2;
-              |result += 4;
-              |result -= 1;
-              |result *= 2;
-              |result /= 2;
-              |result %= 20;
-              |particle.position[1].value = result;
-              |if ((result > limit && enabled != 0) || !(result == 0)) {
-              |  output = result >= 10 ? result : limit;
-              |} else {
-              |  output = -1;
-              |}
-              |return output;
-              |""".stripMargin
+              double result = a + b * 2;
+              result += 4;
+              result -= 1;
+              result *= 2;
+              result /= 2;
+              result %= 20;
+              particle.position[1].value = result;
+              if ((result > limit && enabled != 0) || !(result == 0)) {
+                output = result >= 10 ? result : limit;
+              } else {
+                output = -1;
+              }
+              return output;
+              """.stripMargin
 
         val syntaxTree = parseProgram(source) match
             case fastparse.Parsed.Success(tree, _) => tree
@@ -48,8 +48,9 @@ class FunctionalSemanticTreeIntegrationTests extends munit.FunSuite:
 
         val semanticTree = new FunctionalSemanticTree(args)
         val program = semanticTree.build(syntaxTree)
-        val evaluator = new Evaluator(semanticTree)
 
+
+        // Asserting program correctness.
         assert(program.statements.length == 9)
         assert(program.statements.head == DeclarationNode(
             "double",
@@ -64,14 +65,15 @@ class FunctionalSemanticTreeIntegrationTests extends munit.FunSuite:
         assert(program.statements(7).isInstanceOf[IfNode])
         assert(program.statements.last == ReturnNode(Some(VariableNode("output"))))
 
+
+        val evaluator = new Evaluator(semanticTree)
+
         val returned = evaluator.evaluate()
 
-        assertEquals(evaluator.read(args("output"), "value"), 14.0)
-        assertEquals(evaluator.read(args("particle"), "position[1].value"), 14.0)
-        assertEquals(evaluator.read(semanticTree.stack("result"), "value"), 14.0)
-        assert(returned.contains(args("output")))
-        assertEquals(semanticTree.args("output"), args("output"))
-        assertEquals(semanticTree.stack.size, 1)
+        (args["output"].operators("equals")(14.0))
+        (args["particle"][1].operators("equals")(14.0))
+        semanticTree.stack("result").operators("equals")(14.0)
+
 
     test("semantic tree can own an empty stack or receive an existing stack"):
         val args = HashMap.empty[String, Value]

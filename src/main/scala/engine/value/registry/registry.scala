@@ -28,6 +28,9 @@ final class TypeRegistry:
 
   def contains(name: String): Boolean = this.sizes.contains(name)
 
+  def operator(name: String, Value: Array[Value] ):
+    
+
   def size(name: String): Long =
     this.sizes.getOrElse(name, throw new NoSuchElementException(s"Unknown base type: $name"))
 

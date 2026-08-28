@@ -463,13 +463,13 @@ final class Value(
 
 
   // Returns a Value view backed by this exact same memory array.
-  def apply(memberName: String): Value =
+  def reference_member(memberName: String): Value =
     if this.index.isEmpty then this.index_fields()
     if this.memory.isEmpty then this.allocate()
     this.reference(memberName)
 
   // Returns an indexed Value view while keeping the parent memory as the backing storage.
-  def apply(elementIndex: Int): Value =
+  def reference_element(elementIndex: Int[]): Value =
     if this.index.isEmpty then this.index_fields()
     if this.memory.isEmpty then this.allocate()
 
@@ -531,69 +531,6 @@ final class Value(
     val baseValue = this.base_value()
     baseValue.index("value").valueType.t
 
-  def number(): Double =
-    val baseValue = this.base_value()
-    val field = baseValue.index("value")
-    val memoryBuffer = ByteBuffer.wrap(baseValue.memory)
-    memoryBuffer.position(field.offset.toInt)
-
-    field.valueType.t match
-      case "byte" => memoryBuffer.get().toDouble
-      case "short" => memoryBuffer.getShort().toDouble
-      case "int" => memoryBuffer.getInt().toDouble
-      case "long" => memoryBuffer.getLong().toDouble
-      case "float" => memoryBuffer.getFloat().toDouble
-      case "double" => memoryBuffer.getDouble()
-      case typeName => throw new IllegalArgumentException(s"Base type '$typeName' does not define numeric storage")
-
-  def set_number(number: Double): Value =
-    val baseValue = this.base_value()
-    val field = baseValue.index("value")
-    val memoryBuffer = ByteBuffer.wrap(baseValue.memory)
-    memoryBuffer.position(field.offset.toInt)
-
-    field.valueType.t match
-      case "byte" => memoryBuffer.put(number.toByte)
-      case "short" => memoryBuffer.putShort(number.toShort)
-      case "int" => memoryBuffer.putInt(number.toInt)
-      case "long" => memoryBuffer.putLong(number.toLong)
-      case "float" => memoryBuffer.putFloat(number.toFloat)
-      case "double" => memoryBuffer.putDouble(number)
-      case typeName => throw new IllegalArgumentException(s"Base type '$typeName' does not define numeric storage")
-
-    this
-
-  def truth(): Boolean = this.number() != 0.0
-
-  def integer(): Int = this.number().toInt
-
-  def assign(other: Value): Value =
-    this.set_number(other.number())
-    this
-
-  def numeric_result(other: Value, operation: (Double, Double) => Double): Value =
-    val result = new Value("result", Vector.empty, Map("value" -> this.base_type_name()))
-    result.registry = this.registry
-    result.index_fields()
-    result.allocate()
-    result.set_number(operation(this.number(), other.number()))
-    result
-
-  def comparison_result(other: Value, operation: (Double, Double) => Boolean): Value =
-    val result = new Value("comparison", Vector.empty, Map("value" -> "byte"))
-    result.registry = this.registry
-    result.index_fields()
-    result.allocate()
-    result.set_number(if operation(this.number(), other.number()) then 1.0 else 0.0)
-    result
-
-  def boolean_result(other: Value, operation: (Boolean, Boolean) => Boolean): Value =
-    val result = new Value("logical", Vector.empty, Map("value" -> "byte"))
-    result.registry = this.registry
-    result.index_fields()
-    result.allocate()
-    result.set_number(if operation(this.truth(), other.truth()) then 1.0 else 0.0)
-    result
 
   def base_paths(): Vector[String] =
     if this.index.isEmpty then this.index_fields()
@@ -604,128 +541,14 @@ final class Value(
       .sortBy { case (path, field) => (field.offset, path) }
       .map { case (path, _) => path }
 
-  def operators(name: String)(arguments: (Value | Double | Float | Long | Int | Short | Byte | Boolean)*): Value =
+  def operator(name: String)(arguments: Value*): Value =
     var valueArguments: Vector[Value] = Vector.empty
     var argumentIndex = 0
 
-    while argumentIndex < arguments.length do
-      val argument = arguments(argumentIndex)
-      val valueArgument = argument match
-        case value: Value => value
-        case number: Double =>
-          val value = new Value("literal", Vector.empty, Map("value" -> "double"))
-          value.registry = this.registry
-          value.index_fields()
-          value.allocate()
-          value.set_number(number)
-        case number: Float =>
-          val value = new Value("literal", Vector.empty, Map("value" -> "float"))
-          value.registry = this.registry
-          value.index_fields()
-          value.allocate()
-          value.set_number(number.toDouble)
-        case number: Long =>
-          val value = new Value("literal", Vector.empty, Map("value" -> "long"))
-          value.registry = this.registry
-          value.index_fields()
-          value.allocate()
-          value.set_number(number.toDouble)
-        case number: Int =>
-          val value = new Value("literal", Vector.empty, Map("value" -> "int"))
-          value.registry = this.registry
-          value.index_fields()
-          value.allocate()
-          value.set_number(number.toDouble)
-        case number: Short =>
-          val value = new Value("literal", Vector.empty, Map("value" -> "short"))
-          value.registry = this.registry
-          value.index_fields()
-          value.allocate()
-          value.set_number(number.toDouble)
-        case number: Byte =>
-          val value = new Value("literal", Vector.empty, Map("value" -> "byte"))
-          value.registry = this.registry
-          value.index_fields()
-          value.allocate()
-          value.set_number(number.toDouble)
-        case boolean: Boolean =>
-          val value = new Value("literal", Vector.empty, Map("value" -> "byte"))
-          value.registry = this.registry
-          value.index_fields()
-          value.allocate()
-          value.set_number(if boolean then 1.0 else 0.0)
 
-      valueArguments = valueArguments :+ valueArgument
-      argumentIndex += 1
+    this.registry.operators(name, arguments)
 
-    val thisBasePaths = this.base_paths()
-
-    if thisBasePaths.length == 1 then
-      val baseValue = this.reference(thisBasePaths.head)
-      val baseType = baseValue.base_type_name()
-      val baseOperators = this.registry.operators.getOrElse(
-        baseType,
-        throw new NoSuchElementException(s"No operators are registered for base type '$baseType'")
-      )
-      baseOperators.operator(name, baseValue +: valueArguments)
-    else
-      require(valueArguments.length <= 1, s"Recursive operator '$name' accepts at most one Value argument")
-
-      val comparisonOperators = Set("<", "<=", ">", ">=", "==", "!=", "equals", "&&", "||")
-      val mutatingOperators = Set("=", "+=", "-=", "*=", "/=", "%=")
-      val rightValue = valueArguments.headOption
-      val rightBasePaths = rightValue.map(_.base_paths()).getOrElse(Vector.empty)
-
-      if comparisonOperators.contains(name) then
-        var comparison = if name == "||" then false else true
-        var pathIndex = 0
-
-        while pathIndex < thisBasePaths.length do
-          val leftLeaf = this.reference(thisBasePaths(pathIndex))
-          val rightLeaf = rightValue match
-            case Some(value) =>
-              val rightPath = if rightBasePaths.length == 1 then rightBasePaths.head else rightBasePaths(pathIndex)
-              value.reference(rightPath)
-            case None => leftLeaf
-          val leafResult = leftLeaf.operators(name)(rightLeaf).truth()
-
-          if name == "||" then comparison = comparison || leafResult
-          else comparison = comparison && leafResult
-          pathIndex += 1
-
-        val comparisonValue = new Value("comparison", Vector.empty, Map("value" -> "byte"))
-        comparisonValue.registry = this.registry
-        comparisonValue.index_fields()
-        comparisonValue.allocate()
-        comparisonValue.set_number(if comparison then 1.0 else 0.0)
-      else
-        val result =
-          if mutatingOperators.contains(name) then this
-          else
-            val createdResult = new Value(s"${this.name}_result", this.shape, this.fields)
-            createdResult.registry = this.registry
-            createdResult.index_fields()
-            createdResult.allocate()
-            createdResult
-
-        val resultBasePaths = result.base_paths()
-        var pathIndex = 0
-
-        while pathIndex < thisBasePaths.length do
-          val leftLeaf = this.reference(thisBasePaths(pathIndex))
-          val rightLeaf = rightValue match
-            case Some(value) =>
-              val rightPath = if rightBasePaths.length == 1 then rightBasePaths.head else rightBasePaths(pathIndex)
-              value.reference(rightPath)
-            case None => leftLeaf
-          val leafResult = leftLeaf.operators(name)(rightLeaf)
-
-          if !mutatingOperators.contains(name) then
-            result.reference(resultBasePaths(pathIndex)).operators("=")(leafResult)
-
-          pathIndex += 1
-
-        result
+    
 
 
 

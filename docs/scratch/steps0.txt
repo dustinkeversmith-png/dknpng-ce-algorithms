@@ -91,8 +91,40 @@ Also I would like the idea to pass a stack to the FunctionalSemanticTree but als
 
 4. Evaluate with the evaluator based on a made up mutable args, also instead of MemoryRef, can you just pass in the Value itself, and well use a value indexer to mutate the argument values underneath memory.
 
+
+fst_test.scala
+
+ Your implementation wasn't actually testing the mutability of the underlying memory so I instated ended up passing in a mutableParticle, setting its initial values, and then mutating them in the program, then make make sure their mutation make sense in fst_scala
+
+1. Evaluator
+I dont really like evaluator.write, so dont use a function like that, instead the FunctionalSemanticTree will store the args, with their Values as references for mutation, 
+
+Then when the evaluator goes to evaluate it will read the args from the specified SemanticTree or FST
+
+FST
+I went ahead and just got rid of the base construtor, I dont like those if you could not use those, I prefer to store all memebrs in the class and have individual constructs setters etc
+
+Evaluator
+
+in VariableNodes now we dont have to resolve the node, we have the args which have already resolved and mapped them selve
+
+we are going to also not lump member access and index all in one ya see
+
+ive written psuedo code of whats supposed to happen here,
+
+I've removed the resolve feature, that was dumb, we dont need that, just use smart caching of the hierarchical things you need.
+
+I got rid of read and write, dont bring those back.
+
+Youll read and write just using functions defined on the Value for now until we get operators ready.
+
 BaseTypes
  add operator overloads for all base c-style types, start with the TypeRegistry empty and then just add extension builders
+ 
+This will then help aid in finishing the value layout system to be intelligent and understand what baseTypes are
+
+
+
 
 sbt "testOnly TypeTests"
 sbt "testOnly FunctionalAstTests"

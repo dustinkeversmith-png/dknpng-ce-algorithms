@@ -1,4 +1,6 @@
 
+import scala.collection.mutable.HashMap
+
 
 sealed trait SemanticNode
 
@@ -36,11 +38,14 @@ final case class WhileNode(condition: SemanticNode, body: BlockNode) extends Sem
 final case class ReturnNode(value: Option[SemanticNode]) extends SemanticNode
 
 
-final class FunctionalSemanticTree(
-    var args: Map[String, Value] = Map.empty,
-    var stack: Map[String, Value] = Map.empty
-):
+final class FunctionalSemanticTree:
 
+    def args: NOTHING YET HAVE TO SAVE IT IN THE CONSTRUCTOR
+    
+
+    def this(args: HashMap[String, Value]) =
+        this.args = args
+        
     var program: ProgramNode = ProgramNode(Vector.empty)
 
     def build(syntaxTree: FunctionalTree): ProgramNode =
@@ -110,4 +115,3 @@ final class FunctionalSemanticTree(
                 WhileNode(this.convert(condition), this.convert(body).asInstanceOf[BlockNode])
             case ReturnStatement(value) =>
                 ReturnNode(value.map(this.convert))
-

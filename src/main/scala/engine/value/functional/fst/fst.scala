@@ -1,16 +1,4 @@
 
-trait FunctionalAst:
-
-    // Stored memory references to the arguments
-    def args: Map[String, MemoryRef]
-
-    // Possibly any extra intermediary values created or assigned while executing in a local scope
-    def stack: Map[String, Value]
-
-    
-    // Then probably each line has its own Ast, it executes mean while mutating the stack
-    // Then moving on, and then pushes that all back into the type maybe?
-    
 
 sealed trait SemanticNode
 
@@ -49,9 +37,9 @@ final case class ReturnNode(value: Option[SemanticNode]) extends SemanticNode
 
 
 final class FunctionalSemanticTree(
-    var args: Map[String, MemoryRef] = Map.empty,
+    var args: Map[String, Value] = Map.empty,
     var stack: Map[String, Value] = Map.empty
-) extends FunctionalAst:
+):
 
     var program: ProgramNode = ProgramNode(Vector.empty)
 
@@ -123,36 +111,3 @@ final class FunctionalSemanticTree(
             case ReturnStatement(value) =>
                 ReturnNode(value.map(this.convert))
 
-
-class FunctionalAstTests:
-    def test_build_semantic_tree_from_parser_syntax(): Unit =
-        val source =
-            """
-              |Value selected = particle.position[2];
-              |selected = enabled ? selected + 1 : fallback;
-              |return selected;
-              |""".stripMargin
-
-        parseProgram(source) match
-            case fastparse.Parsed.Success(syntaxTree, _) =>
-                val semanticTree = new FunctionalSemanticTree()
-                val program = semanticTree.build(syntaxTree)
-
-                assert(program.statements.length == 3)
-                assert(program.statements(0).isInstanceOf[DeclarationNode])
-
-                val declaration = program.statements(0).asInstanceOf[DeclarationNode]
-                assert(declaration.valueType == "Value")
-                assert(declaration.initialValue.contains(
-                    IndexAccessNode(
-                        MemberAccessNode(VariableNode("particle"), "position"),
-                        NumericLiteralNode(2.0)
-                    )
-                ))
-
-                val assignment = program.statements(1).asInstanceOf[AssignmentOperatorNode]
-                assert(assignment.value.isInstanceOf[TernaryOperatorNode])
-                assert(program.statements(2) == ReturnNode(Some(VariableNode("selected"))))
-
-            case failure: fastparse.Parsed.Failure =>
-                throw new AssertionError(failure.trace().longMsg)

@@ -61,3 +61,44 @@ NO EXTRA BASE VALUETYPE MOTHER FUCKER, PERMANENT CHECKS ALWAYS
 
 
 
+# Value precedents.
+sbt "testOnly com.example.MyTestSuite"
+
+
+
+
+// Run by class name only.
+sbt "testOnly *TypeTests"
+
+
+
+
+scala-cli src/main/scala/engine/value/value.scala
+
+Ensure Functional Evaluation and Typing.
+
+sbt "testOnly ParserTests"
+
+To TestValue we will except a input 
+
+1. Update the newly named fst library to match the updated parser.scala, computing the finalized nodal tree
+
+2. Notice how i moved the weird args, stack out of the FunctionalSemanticTree I just wanna have a this or init for that as well its kind of confusing.
+
+Also I would like the idea to pass a stack to the FunctionalSemanticTree but also have the option to not and it just comes with an empty one it fills up.
+
+3. Test a full conversion of a FunctionalTree into the semantic tree to
+
+4. Evaluate with the evaluator based on a made up mutable args, also instead of MemoryRef, can you just pass in the Value itself, and well use a value indexer to mutate the argument values underneath memory.
+
+BaseTypes
+ add operator overloads for all base c-style types, start with the TypeRegistry empty and then just add extension builders
+
+sbt "testOnly TypeTests"
+sbt "testOnly FunctionalAstTests"
+
+most likely well start with the basetypes registry, register all general base types and operators, which will require the ast and semantic evaluation.
+
+What do I need to do? I need to make sure my syntax trees look good, and hook up my basetypes operator registry to actually test automatic series of value descriptions, one test for base line, one test for recursion
+
+Then baseline operators, and operators recursion

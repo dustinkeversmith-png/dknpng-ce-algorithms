@@ -16,29 +16,29 @@ import scala.collection.mutable.HashMap
 /**
  * Core typeclass / specification defining an Ambient and Valid State Space.
  */
-trait Space:
+trait Space[S]:
   /** Human-readable description */
   def description: String
 
   /** Structural shape descriptor eg dimensionality and length which is not a string anymore, an array of integers will suffice, with each describing the length of the dimensions. */
 
   /** [1] For example when it is a set of singular entities such as real numbers, etc*/
-  def shape: List[Integer]
+  def shape: String
 
   
 
   /** A complete value type descriptor of what kind of objects are stored in here. */
-  def value_type: ValueType
+  def value_type: Any = description
 
 
   /** List of semantic and structural invariants governing this space */
   def invariants: List[Invariant[S]]
 
   /** List of all semantic invariants associated with this Space eg. "Sum of row elemnts must equal 1.0"*/
-  def semantic_invariants: List[Invariant[S]]
+  def semantic_invariants: List[Invariant[S]] = invariants
 
   /** List of all structural invariants associated with this Space eg. in terms of sizes and shapes of the thing and type, columns same size" */
-  def structural_invariants: List[Invariant[S]]
+  def structural_invariants: List[Invariant[S]] = List.empty
 
 
   
@@ -50,13 +50,21 @@ trait Space:
   /** Guaranteed to the produced generation satisfies the semantic_invariants and structural invariants and is a part of this space */
   def generate(): S
 
+  /** Optional generator/enumeration for discrete or bounded spaces */
+  def enumerate: LazyList[S] = LazyList.empty
+
   /** Checks if `s` satisfies all space invariants */
-  def contains(v: V): Boolean =
+  def contains(s: S): Boolean =
 
 
     // Same type structural layout check.
     // structural and semantic values associated with each sub type or field would also make alot more sense
     invariants.forall(_.holds(s))
+
+  /** Validates a value and reports every violated invariant. */
+  def validate(s: S): Either[List[String], S] =
+    val errors = invariants.filterNot(_.holds(s)).map(inv => s"[${inv.name}]: ${inv.violationMessage(s)}")
+    if errors.isEmpty then Right(s) else Left(errors)
 
   // No validation or anything like that, no errors involved.
 
@@ -64,7 +72,7 @@ trait Space:
   /** Local neighborhood perturbation generator */
   /** Some kind of topology, possibly simply just a inverse vector similarity on the memory layout for starters as a default */
   /** Or having some kind of way of navigating the space obviously ints is just +1 % max or something*/
-  def neighbors(v: Value):
+  def neighbors(s: S): LazyList[S] = LazyList.empty
 
   /** Distance metric between two states in this space */
   def distance(a: S, b: S): Double = 0.0

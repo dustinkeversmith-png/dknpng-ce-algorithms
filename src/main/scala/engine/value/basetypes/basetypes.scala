@@ -5,7 +5,7 @@ trait BaseTypeOperator
 
 // Register of all base type sizes
 object TypeRegistry:
-
+  
   val typeSizes: HashMap[String, Long] =
     HashMap(
       "byte"   -> 1L,

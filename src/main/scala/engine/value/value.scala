@@ -24,7 +24,10 @@ class ValueType(
 
   // Shape describes the dimensionality of this value type so it could be like [2][2] meaning it has like a set standard dimensionality of itself 2x2 as a matrix
 
+  // Size of the entire value structure
   var element_size: Long = 0L
+
+  // Size of the entire vector structure.
   var byte_size: Long = 0L
 
 
@@ -66,7 +69,7 @@ class ValueType(
 
 
 
-  override def equals(other: Any): Boolean =
+  override def equals(other: ValueType): Boolean =
     other match
       case that: ValueType =>
         if this.name != that.name then return false
@@ -185,7 +188,7 @@ final class Value(
 ) extends ValueType(name, shape, fields):
 
   // Every Value carries the registry which measures and operates on its base leaves.
-  var registry: TypeRegistry = TypeRegistry.default
+  var registry: TypeRegistry = new BaseTypes().registerAll()
 
   // THIS IS A INDEX NOT DETAILS
   var index: Map[String, FieldIndex] = Map.empty
@@ -380,7 +383,9 @@ final class Value(
       throw new NoSuchElementException(s"Dimension path has not been indexed: $dimensionPath")
     )
 
-  def iterate_dimension(): Iterator[FieldIndex] =
+  
+
+  def iterate_dimension(indices: Int[], offset: Int): Iterator[FieldIndex] =
     this.index.toVector
       .filter { case (path, _) => path.matches("""(\[\d+\])+""") }
       .sortBy { case (path, fieldIndex) => (fieldIndex.offset, path) }
@@ -567,17 +572,26 @@ final class Value(
     this
 
   def numeric_result(other: Value, operation: (Double, Double) => Double): Value =
-    val result = this.registry.value("result", this.base_type_name())
+    val result = new Value("result", Vector.empty, Map("value" -> this.base_type_name()))
+    result.registry = this.registry
+    result.index_fields()
+    result.allocate()
     result.set_number(operation(this.number(), other.number()))
     result
 
   def comparison_result(other: Value, operation: (Double, Double) => Boolean): Value =
-    val result = this.registry.value("comparison", "byte")
+    val result = new Value("comparison", Vector.empty, Map("value" -> "byte"))
+    result.registry = this.registry
+    result.index_fields()
+    result.allocate()
     result.set_number(if operation(this.number(), other.number()) then 1.0 else 0.0)
     result
 
   def boolean_result(other: Value, operation: (Boolean, Boolean) => Boolean): Value =
-    val result = this.registry.value("logical", "byte")
+    val result = new Value("logical", Vector.empty, Map("value" -> "byte"))
+    result.registry = this.registry
+    result.index_fields()
+    result.allocate()
     result.set_number(if operation(this.truth(), other.truth()) then 1.0 else 0.0)
     result
 
@@ -598,13 +612,48 @@ final class Value(
       val argument = arguments(argumentIndex)
       val valueArgument = argument match
         case value: Value => value
-        case number: Double => this.registry.literal(number)
-        case number: Float => this.registry.literal(number)
-        case number: Long => this.registry.literal(number)
-        case number: Int => this.registry.literal(number)
-        case number: Short => this.registry.literal(number)
-        case number: Byte => this.registry.literal(number)
-        case boolean: Boolean => this.registry.literal(boolean)
+        case number: Double =>
+          val value = new Value("literal", Vector.empty, Map("value" -> "double"))
+          value.registry = this.registry
+          value.index_fields()
+          value.allocate()
+          value.set_number(number)
+        case number: Float =>
+          val value = new Value("literal", Vector.empty, Map("value" -> "float"))
+          value.registry = this.registry
+          value.index_fields()
+          value.allocate()
+          value.set_number(number.toDouble)
+        case number: Long =>
+          val value = new Value("literal", Vector.empty, Map("value" -> "long"))
+          value.registry = this.registry
+          value.index_fields()
+          value.allocate()
+          value.set_number(number.toDouble)
+        case number: Int =>
+          val value = new Value("literal", Vector.empty, Map("value" -> "int"))
+          value.registry = this.registry
+          value.index_fields()
+          value.allocate()
+          value.set_number(number.toDouble)
+        case number: Short =>
+          val value = new Value("literal", Vector.empty, Map("value" -> "short"))
+          value.registry = this.registry
+          value.index_fields()
+          value.allocate()
+          value.set_number(number.toDouble)
+        case number: Byte =>
+          val value = new Value("literal", Vector.empty, Map("value" -> "byte"))
+          value.registry = this.registry
+          value.index_fields()
+          value.allocate()
+          value.set_number(number.toDouble)
+        case boolean: Boolean =>
+          val value = new Value("literal", Vector.empty, Map("value" -> "byte"))
+          value.registry = this.registry
+          value.index_fields()
+          value.allocate()
+          value.set_number(if boolean then 1.0 else 0.0)
 
       valueArguments = valueArguments :+ valueArgument
       argumentIndex += 1
@@ -618,7 +667,7 @@ final class Value(
         baseType,
         throw new NoSuchElementException(s"No operators are registered for base type '$baseType'")
       )
-      baseOperators.operator(name, baseValue, valueArguments)
+      baseOperators.operator(name, baseValue +: valueArguments)
     else
       require(valueArguments.length <= 1, s"Recursive operator '$name' accepts at most one Value argument")
 
@@ -644,7 +693,11 @@ final class Value(
           else comparison = comparison && leafResult
           pathIndex += 1
 
-        this.registry.literal(comparison)
+        val comparisonValue = new Value("comparison", Vector.empty, Map("value" -> "byte"))
+        comparisonValue.registry = this.registry
+        comparisonValue.index_fields()
+        comparisonValue.allocate()
+        comparisonValue.set_number(if comparison then 1.0 else 0.0)
       else
         val result =
           if mutatingOperators.contains(name) then this

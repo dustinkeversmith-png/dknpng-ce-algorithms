@@ -1,12 +1,12 @@
 
 class TypeTests extends munit.FunSuite:
   test("base type pack registers sizes and lambda operators into an empty registry"):
-    val registry = new TypeRegistry()
-    assert(registry.sizes.isEmpty)
-    assert(registry.operators.isEmpty)
+    val emptyRegistry = new TypeRegistry()
+    assert(emptyRegistry.sizes.isEmpty)
+    assert(emptyRegistry.operators.isEmpty)
 
-    val baseTypes = new BaseTypes(registry)
-    baseTypes.register()
+    val baseTypes = new BaseTypes()
+    val registry = baseTypes.registerAll()
 
     assert(registry.sizes("byte") == 1L)
     assert(registry.sizes("short") == 2L)
@@ -14,8 +14,8 @@ class TypeTests extends munit.FunSuite:
     assert(registry.sizes("long") == 8L)
     assert(registry.sizes("float") == 4L)
     assert(registry.sizes("double") == 8L)
-    assert(registry.operators("double").operator_set.contains("+"))
-    assert(registry.operators("double").operator_set.contains("="))
+    assert(registry.operators("double").operator_set.contains("+_double_double"))
+    assert(registry.operators("double").operator_set.contains("=_double_double"))
 
     val value = new Value("registered", Vector.empty, Map("value" -> "double"))
     value.registry = registry
@@ -101,6 +101,9 @@ class TypeTests extends munit.FunSuite:
       Map("value" -> "int")
     )
 
+
+    
+
     val this_value_type = new Value(
       "ParticleGrid",
       Vector(2, 2, 2, 2),
@@ -110,6 +113,32 @@ class TypeTests extends munit.FunSuite:
         "position" -> positionType
       )
     )
+
+    val position = new Value(
+      "position",
+      Vector(3),
+      Map("value" -> "int")
+    )
+
+    // Basic indexing and assignment
+    position[0] = 1;
+    position[1] = 2;
+    position[2] = 3;
+
+    // Multidimensional iteration
+    val iter = position.iterator();
+    // This should return the value as the value type on next etc 
+
+    // Multidimensional and nested assignment
+    this_value_type[0,0,0,0]["id"] = 2;
+    this_value_type[0,0,0,0]["mass"] = 3.0;
+
+    // Iterating values example
+    val iter =  this_value_type[0,0,0,0].iterator()
+    // .value resolves the iterator and will return the nest type as a Value 
+    Value id = iter.value() 
+    // Return values like this ensures that we never have any types we just use the specified types.
+    Value mass = iter.next().value()
 
     this_value_type.index_fields()
 

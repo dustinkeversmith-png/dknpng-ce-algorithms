@@ -20,7 +20,7 @@ final case class FunctionalId(name: String, arguments: Map[String, String])
 final class ValueOperators:
 
   // Map[String, Functional(Value a, Value b, ... However many values) -> Value] operator_set
-  var operator_set: HashMap[String, OperatorFunction] = HashMap.empty
+  var operator_set: HashMap[String, (FunctionalId, OperatorFunction)] = HashMap.empty
 
   // Then can map independent operator overrides to the operator_set as functions.
   // Sets the operator under the name.
@@ -29,19 +29,39 @@ final class ValueOperators:
     // We can create a functionalId from the name and args signature.
 
     // Here are going to parse a unique string describing the function which will be 
-    val fid_hash = {id.name}_{id.arguments[0].second}_{id.arguments[1].second}
+    var fid_hash = id.name
+    val argumentTypes = id.arguments.values.toVector
+    var argumentIndex = 0
+
+    while argumentIndex < argumentTypes.length do
+      fid_hash += s"_${argumentTypes(argumentIndex)}"
+      argumentIndex += 1
     // second is the type name of the argument, but it also has names so we can then keep track of which variable is which just in case.
 
     // here we store the FunctionalId along side the operator function for ease of passing the arguments 
-    this.operator_set(fid_hash) = [FunctionalId, OperatorFunction]
+    this.operator_set(fid_hash) = (id, operator)
 
   //
   def operator(name: String, arguments: Vector[Value]): Value =
     // The args will then end up being string mode and Values in this case which the values will probably be mutated so they wont really be copied around but possibly referenced.
-    this.operator_set.getOrElse(
-      name,
-      throw new NoSuchElementException(s"Unknown operator '$name' for base type '${value.base_type_name()}'")
-    )(value, arguments)
+    require(arguments.nonEmpty, s"Operator '$name' requires at least one Value argument")
+
+    var fid_hash = name
+    var argumentIndex = 0
+    while argumentIndex < arguments.length do
+      fid_hash += s"_${arguments(argumentIndex).base_type_name()}"
+      argumentIndex += 1
+
+    val (id, operatorFunction) = this.operator_set.getOrElse(
+      fid_hash,
+      throw new NoSuchElementException(s"Unknown operator overload '$fid_hash'")
+    )
+
+    require(
+      id.arguments.size == arguments.size,
+      s"Operator '${id.name}' expected ${id.arguments.size} arguments but received ${arguments.size}"
+    )
+    operatorFunction(arguments.head, arguments.tail)
 
     // Find the Functional
     // Compile it into the syntactic and ast form

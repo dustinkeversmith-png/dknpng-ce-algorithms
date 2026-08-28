@@ -22,7 +22,10 @@ final class Evaluator(var tree: FunctionalSemanticTree) extends Evalulator:
         this.returned
 
     def evaluate_program(program: ProgramNode): Value =
-        var evaluatedValue = this.tree.registry.literal(0.0)
+        var evaluatedValue = new Value("program", Vector.empty, Map("value" -> "double"))
+        evaluatedValue.registry = this.tree.registry
+        evaluatedValue.index_fields()
+        evaluatedValue.allocate()
         var statementIndex = 0
 
         while statementIndex < program.statements.length && !this.has_returned do
@@ -32,7 +35,10 @@ final class Evaluator(var tree: FunctionalSemanticTree) extends Evalulator:
         evaluatedValue
 
     def evaluate_block(block: BlockNode): Value =
-        var evaluatedValue = this.tree.registry.literal(0.0)
+        var evaluatedValue = new Value("block", Vector.empty, Map("value" -> "double"))
+        evaluatedValue.registry = this.tree.registry
+        evaluatedValue.index_fields()
+        evaluatedValue.allocate()
         var statementIndex = 0
 
         while statementIndex < block.statements.length && !this.has_returned do
@@ -61,7 +67,11 @@ final class Evaluator(var tree: FunctionalSemanticTree) extends Evalulator:
                 // Index access uses the current hierarchical Value view, not a flattened resolver.
                 this.evaluate_node(value)(this.evaluate_node(index).integer())
             case NumericLiteralNode(value) =>
-                this.tree.registry.literal(value)
+                val literalValue = new Value("literal", Vector.empty, Map("value" -> "double"))
+                literalValue.registry = this.tree.registry
+                literalValue.index_fields()
+                literalValue.allocate()
+                literalValue.set_number(value)
             case StringLiteralNode(_) =>
                 throw new UnsupportedOperationException("String Value registration is not available in the base type pack")
             case UnaryOperatorNode(operator, value) =>
@@ -86,7 +96,10 @@ final class Evaluator(var tree: FunctionalSemanticTree) extends Evalulator:
                 val rightValue = this.evaluate_node(assignedValue)
                 targetValue.operators(operator)(rightValue)
             case DeclarationNode(valueType, name, initialValue) =>
-                val stackValue = this.tree.registry.value(name, valueType)
+                val stackValue = new Value(name, Vector.empty, Map("value" -> valueType))
+                stackValue.registry = this.tree.registry
+                stackValue.index_fields()
+                stackValue.allocate()
                 initialValue.foreach(value => stackValue.operators("=")(this.evaluate_node(value)))
                 this.tree.stack(name) = stackValue
                 stackValue
@@ -97,15 +110,29 @@ final class Evaluator(var tree: FunctionalSemanticTree) extends Evalulator:
                 else
                     elseBranch match
                         case Some(branch) => this.evaluate_block(branch)
-                        case None => this.tree.registry.literal(0.0)
+                        case None =>
+                            val emptyIfValue = new Value("if", Vector.empty, Map("value" -> "double"))
+                            emptyIfValue.registry = this.tree.registry
+                            emptyIfValue.index_fields()
+                            emptyIfValue.allocate()
+                            emptyIfValue
             case WhileNode(condition, body) =>
-                var evaluatedValue = this.tree.registry.literal(0.0)
+                var evaluatedValue = new Value("while", Vector.empty, Map("value" -> "double"))
+                evaluatedValue.registry = this.tree.registry
+                evaluatedValue.index_fields()
+                evaluatedValue.allocate()
                 while !this.has_returned && this.evaluate_node(condition).truth() do
                     evaluatedValue = this.evaluate_block(body)
                 evaluatedValue
             case ReturnNode(value) =>
                 this.returned = value.map(this.evaluate_node)
                 this.has_returned = true
-                this.returned.getOrElse(this.tree.registry.literal(0.0))
+                this.returned.getOrElse {
+                    val emptyReturnValue = new Value("return", Vector.empty, Map("value" -> "double"))
+                    emptyReturnValue.registry = this.tree.registry
+                    emptyReturnValue.index_fields()
+                    emptyReturnValue.allocate()
+                    emptyReturnValue
+                }
             case FunctionCallNode(_, _) =>
                 throw new UnsupportedOperationException("Function call evaluation requires a registered operator function")

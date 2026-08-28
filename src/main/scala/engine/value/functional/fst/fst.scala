@@ -42,7 +42,7 @@ final class FunctionalSemanticTree:
 
     var args: HashMap[String, Value] = HashMap.empty
     var stack: HashMap[String, Value] = HashMap.empty
-    var registry: TypeRegistry = TypeRegistry.default
+    var registry: TypeRegistry = new BaseTypes().registerAll()
 
     def this(args: HashMap[String, Value]) =
         this()

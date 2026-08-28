@@ -12,7 +12,7 @@ final class TypeRegistry:
   // The bootstrap implementation now stores ValueOperators in that same per-type position.
   var operators: HashMap[String, ValueOperators] = HashMap.empty
 
-  def register_type(name: String, size: Long): 
+  def register_type(name: String, size: Long): Unit =
     require(name.nonEmpty, "A base type name cannot be empty")
     require(size > 0, "A base type must occupy at least one byte")
     this.sizes(name) = size
@@ -20,8 +20,11 @@ final class TypeRegistry:
     val registeredOperators = new ValueOperators()
     this.operators(name) = registeredOperators
 
-  def register_operator(name: String, FunctionalId id, OperatorFunction):
-    this.operators(name).register()
+  def register_operator(name: String, id: FunctionalId, operator: OperatorFunction): Unit =
+    this.operators.getOrElse(
+      name,
+      throw new NoSuchElementException(s"Register type '$name' before registering its operators")
+    ).register(id, operator)
 
   def contains(name: String): Boolean = this.sizes.contains(name)
 

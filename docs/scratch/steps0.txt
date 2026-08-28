@@ -169,5 +169,7 @@ I transitioned BaseTypes object, into base helper, now the syntax of registry ne
 
 using our handy dandy FunctionalId
 
+no more will we use this left.comparison etc that is garbage and stupid. no more.
+
 # Spaces
 # Perfect Problem Definition

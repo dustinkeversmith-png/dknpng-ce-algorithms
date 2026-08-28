@@ -1,7 +1,5 @@
 // We will have our operator nodes, assignments, all that stuff up here
 
-import java.nio.ByteBuffer
-
 trait Evalulator:
 
     def evaluate(): Option[Value]
@@ -23,121 +21,91 @@ final class Evaluator(var tree: FunctionalSemanticTree) extends Evalulator:
         this.evaluate_program(this.tree.program)
         this.returned
 
-    def evaluate_program(program: ProgramNode): Unit =
+    def evaluate_program(program: ProgramNode): Value =
+        var evaluatedValue = this.tree.registry.literal(0.0)
         var statementIndex = 0
+
         while statementIndex < program.statements.length && !this.has_returned do
-            this.evaluate_node(program.statements(statementIndex))
+            evaluatedValue = this.evaluate_node(program.statements(statementIndex))
             statementIndex += 1
 
-    def evaluate_block(block: BlockNode): Unit =
+        evaluatedValue
+
+    def evaluate_block(block: BlockNode): Value =
+        var evaluatedValue = this.tree.registry.literal(0.0)
         var statementIndex = 0
+
         while statementIndex < block.statements.length && !this.has_returned do
-            this.evaluate_node(block.statements(statementIndex))
+            evaluatedValue = this.evaluate_node(block.statements(statementIndex))
             statementIndex += 1
 
-    def evaluate_node(node: SemanticNode): Any =
+        evaluatedValue
+
+    def evaluate_node(node: SemanticNode): Value =
         node match
             case ProgramNode(statements) =>
                 this.evaluate_program(ProgramNode(statements))
-            case MemberAccessNode(_, _) =>
+            case VariableNode(name) =>
+                // Variable names have already been mapped to Value references by the FST.
+                this.tree.stack.get(name)
+                    .orElse(this.tree.args.get(name))
+                    .getOrElse(throw new NoSuchElementException(s"Unknown value: $name"))
+            case MemberAccessNode(value, member) =>
                 // Here the last hierarchically visited variable node can be known to reference the . or member access
                 // MemberName = node.memberName
                 // MemberAccess = args[VariableName][MemberName], from here we have the internal value where we can then set values using the Value Class as it is normally done.
-            case IndexAccessNode(_, _) =>
-
-                 // Fill in the gaps here
-            case VariableNode(_)  =>
-
-
-                val (value, field) = this.resolve(node)
-                this.read(value, field)
+                // Member access keeps returning a Value view backed by the original argument memory.
+                this.evaluate_node(value)(member)
+            case IndexAccessNode(value, index) =>
+                // Fill in the gaps here
+                // Index access uses the current hierarchical Value view, not a flattened resolver.
+                this.evaluate_node(value)(this.evaluate_node(index).integer())
             case NumericLiteralNode(value) =>
-                value
-            case StringLiteralNode(value) =>
-                value
+                this.tree.registry.literal(value)
+            case StringLiteralNode(_) =>
+                throw new UnsupportedOperationException("String Value registration is not available in the base type pack")
             case UnaryOperatorNode(operator, value) =>
                 val evaluatedValue = this.evaluate_node(value)
                 operator match
-                    case "+" => this.number(evaluatedValue)
-                    case "-" => -this.number(evaluatedValue)
-                    case "!" => !this.boolean(evaluatedValue)
+                    case "+" => evaluatedValue.operators("unary+")()
+                    case "-" => evaluatedValue.operators("unary-")()
+                    case "!" => evaluatedValue.operators("!")()
                     case _ => throw new IllegalArgumentException(s"Unknown unary operator: $operator")
-            case BinaryOperatorNode(left, "&&", right) =>
-                this.boolean(this.evaluate_node(left)) && this.boolean(this.evaluate_node(right))
-            case BinaryOperatorNode(left, "||", right) =>
-                this.boolean(this.evaluate_node(left)) || this.boolean(this.evaluate_node(right))
             case BinaryOperatorNode(left, operator, right) =>
                 val leftValue = this.evaluate_node(left)
-                val rightValue = this.evaluate_node(right)
-                operator match
-                    case "+" => this.number(leftValue) + this.number(rightValue)
-                    case "-" => this.number(leftValue) - this.number(rightValue)
-                    case "*" => this.number(leftValue) * this.number(rightValue)
-                    case "/" => this.number(leftValue) / this.number(rightValue)
-                    case "%" => this.number(leftValue) % this.number(rightValue)
-                    case "<" => this.number(leftValue) < this.number(rightValue)
-                    case "<=" => this.number(leftValue) <= this.number(rightValue)
-                    case ">" => this.number(leftValue) > this.number(rightValue)
-                    case ">=" => this.number(leftValue) >= this.number(rightValue)
-                    case "==" => leftValue == rightValue
-                    case "!=" => leftValue != rightValue
-                    case _ => throw new IllegalArgumentException(s"Unknown binary operator: $operator")
+
+                // These preserve short-circuit behavior while the actual operation remains a Value operator.
+                if operator == "&&" && !leftValue.truth() then leftValue
+                else if operator == "||" && leftValue.truth() then leftValue
+                else leftValue.operators(operator)(this.evaluate_node(right))
             case TernaryOperatorNode(condition, whenTrue, whenFalse) =>
-                if this.boolean(this.evaluate_node(condition)) then this.evaluate_node(whenTrue)
+                if this.evaluate_node(condition).truth() then this.evaluate_node(whenTrue)
                 else this.evaluate_node(whenFalse)
             case AssignmentOperatorNode(target, operator, assignedValue) =>
-                val (value, field) = this.resolve(target)
+                val targetValue = this.evaluate_node(target)
                 val rightValue = this.evaluate_node(assignedValue)
-                val finalValue = operator match
-                    case "=" => rightValue
-                    case "+=" => this.number(this.read(value, field)) + this.number(rightValue)
-                    case "-=" => this.number(this.read(value, field)) - this.number(rightValue)
-                    case "*=" => this.number(this.read(value, field)) * this.number(rightValue)
-                    case "/=" => this.number(this.read(value, field)) / this.number(rightValue)
-                    case "%=" => this.number(this.read(value, field)) % this.number(rightValue)
-                    case _ => throw new IllegalArgumentException(s"Unknown assignment operator: $operator")
-                this.write(value, field, finalValue)
-                finalValue
+                targetValue.operators(operator)(rightValue)
             case DeclarationNode(valueType, name, initialValue) =>
-                val evaluatedValue = initialValue.map(this.evaluate_node).getOrElse(0.0)
-                val baseType =
-                    if TypeRegistry.contains(valueType) then valueType
-                    else evaluatedValue match
-                        case _: Boolean => "byte"
-                        case _ => "double"
-                val stackValue = new Value(name, Vector.empty, Map("value" -> baseType))
-                stackValue.index_fields()
-                stackValue.allocate()
-                this.write(stackValue, "value", evaluatedValue)
+                val stackValue = this.tree.registry.value(name, valueType)
+                initialValue.foreach(value => stackValue.operators("=")(this.evaluate_node(value)))
                 this.tree.stack(name) = stackValue
-                evaluatedValue
+                stackValue
             case BlockNode(statements) =>
                 this.evaluate_block(BlockNode(statements))
             case IfNode(condition, thenBranch, elseBranch) =>
-                if this.boolean(this.evaluate_node(condition)) then this.evaluate_block(thenBranch)
-                else elseBranch.foreach(this.evaluate_block)
+                if this.evaluate_node(condition).truth() then this.evaluate_block(thenBranch)
+                else
+                    elseBranch match
+                        case Some(branch) => this.evaluate_block(branch)
+                        case None => this.tree.registry.literal(0.0)
             case WhileNode(condition, body) =>
-                while !this.has_returned && this.boolean(this.evaluate_node(condition)) do
-                    this.evaluate_block(body)
+                var evaluatedValue = this.tree.registry.literal(0.0)
+                while !this.has_returned && this.evaluate_node(condition).truth() do
+                    evaluatedValue = this.evaluate_block(body)
+                evaluatedValue
             case ReturnNode(value) =>
-                value match
-                    case Some(returnValue) =>
-                        returnValue match
-                            case VariableNode(_) | MemberAccessNode(_, _) | IndexAccessNode(_, _) =>
-                                val (storedValue, _) = this.resolve(returnValue)
-                                this.returned = Some(storedValue)
-                            case _ =>
-                                val evaluatedValue = this.evaluate_node(returnValue)
-                                val result = new Value("return", Vector.empty, Map("value" -> "double"))
-                                result.index_fields()
-                                result.allocate()
-                                this.write(result, "value", evaluatedValue)
-                                this.returned = Some(result)
-                    case None =>
-                        this.returned = None
+                this.returned = value.map(this.evaluate_node)
                 this.has_returned = true
+                this.returned.getOrElse(this.tree.registry.literal(0.0))
             case FunctionCallNode(_, _) =>
-                throw new UnsupportedOperationException("Function call evaluation requires a registered Functional")
-
-    
-
+                throw new UnsupportedOperationException("Function call evaluation requires a registered operator function")

@@ -1,39 +1,47 @@
-// Import Functionals
-
 import scala.collection.mutable.HashMap
 
 
-final case class ArgumentMap(arguments: Map[String, String]) // Typename and parameter name.
+// Import Functionals
+
+// Typename and parameter name.
 
 // name is name of the operation, and arguments is the argument signature
-final case class FunctionalId(name: String, arguments: Map[String, String])
-
 // so that way we can find the matching Functional based on the name of the operator and types of the function signature.
 
-trait ValueOperators:
+type OperatorFunction = (Value, Vector[Value]) => Value
+
+
+// Functional programs still use this as their external name and argument signature.
+final case class FunctionalId(name: String, arguments: Map[String, String])
+
+
+// Each registered value type owns a set of bootstrap functions.
+// Functional can replace these functions later without changing Value dispatch.
+final class ValueOperators:
 
   // Map[String, Functional(Value a, Value b, ... However many values) -> Value] operator_set
-  def operatorSet: HashMap[FunctionalId, Functional]
+  var operator_set: HashMap[String, OperatorFunction] = HashMap.empty
 
   // Then can map independent operator overrides to the operator_set as functions.
   // Sets the operator under the name.
-  def register(
-    name: String,
-    args: ArgumentMap,
-    functional: Functional
-  ): Unit =
-
+  def register(id: FunctionalId, operator: OperatorFunction): Unit =
     // Functional should probably cache its build if its buildable.
     // We can create a functionalId from the name and args signature.
-    operatorSet(FunctionalId(name, args.arguments)) = functional
+
+    // Here are going to parse a unique string describing the function which will be 
+    val fid_hash = {id.name}_{id.arguments[0].second}_{id.arguments[1].second}
+    // second is the type name of the argument, but it also has names so we can then keep track of which variable is which just in case.
+
+    // here we store the FunctionalId along side the operator function for ease of passing the arguments 
+    this.operator_set(fid_hash) = [FunctionalId, OperatorFunction]
 
   //
-  def operator(name: String, args: Map[String, Value]): Functional =
-
+  def operator(name: String, value: Value, arguments: Vector[Value]): Value =
     // The args will then end up being string mode and Values in this case which the values will probably be mutated so they wont really be copied around but possibly referenced.
-    operatorSet.collectFirst {
-      case (id, functional) if id.name == name && id.arguments.keySet == args.keySet => functional
-    }.getOrElse(throw new NoSuchElementException(s"Unknown operator '$name' for arguments ${args.keySet.mkString(", ")}"))
+    this.operator_set.getOrElse(
+      name,
+      throw new NoSuchElementException(s"Unknown operator '$name' for base type '${value.base_type_name()}'")
+    )(value, arguments)
 
     // Find the Functional
     // Compile it into the syntactic and ast form
@@ -41,6 +49,7 @@ trait ValueOperators:
     // functional.Execture
 
     // The return type can be "Return","Type" in the arg map if a return type is expected, but the operation can always return any Value as in generic value type.
+
 
 // Usage for base types.
 // basetypes.register_operator("double", ["x","a", "b"], "x = a + b;")

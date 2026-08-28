@@ -40,11 +40,25 @@ final case class ReturnNode(value: Option[SemanticNode]) extends SemanticNode
 
 final class FunctionalSemanticTree:
 
-    def args: NOTHING YET HAVE TO SAVE IT IN THE CONSTRUCTOR
-    
+    var args: HashMap[String, Value] = HashMap.empty
+    var stack: HashMap[String, Value] = HashMap.empty
+    var registry: TypeRegistry = TypeRegistry.default
 
     def this(args: HashMap[String, Value]) =
+        this()
+        this.set_args(args)
+
+    def this(args: HashMap[String, Value], stack: HashMap[String, Value]) =
+        this()
+        this.set_args(args)
+        this.set_stack(stack)
+
+    def set_args(args: HashMap[String, Value]): Unit =
         this.args = args
+        if args.nonEmpty then this.registry = args.head._2.registry
+
+    def set_stack(stack: HashMap[String, Value]): Unit =
+        this.stack = stack
         
     var program: ProgramNode = ProgramNode(Vector.empty)
 

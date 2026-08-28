@@ -24,11 +24,14 @@ trait Space[S]:
 
   /** [1] For example when it is a set of singular entities such as real numbers, etc*/
   def shape: String
+  // This shape will mirror the Value description
 
   
 
   /** A complete value type descriptor of what kind of objects are stored in here. */
   def value_type: Any = description
+
+  // This will be valueType description
 
 
   /** List of semantic and structural invariants governing this space */
@@ -73,6 +76,7 @@ trait Space[S]:
   /** Some kind of topology, possibly simply just a inverse vector similarity on the memory layout for starters as a default */
   /** Or having some kind of way of navigating the space obviously ints is just +1 % max or something*/
   def neighbors(s: S): LazyList[S] = LazyList.empty
+  // Need a intelligent way to topologically traverse the space with our invariants, we can now solidly iterate through any type type, but know we need incrementers, or known dimensionality in the value, also the invariants/constraints will most likely factor into this calcualtion
 
   /** Distance metric between two states in this space */
   def distance(a: S, b: S): Double = 0.0

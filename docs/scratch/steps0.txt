@@ -131,7 +131,7 @@ youll see the expected syntax changes based on my changes to the fst_test
 and also Ill be changing the stac
 
 
-
+So now how this is going to work is that we have BaseTypes 
 
 BaseTypes
  add operator overloads for all base c-style types, start with the TypeRegistry empty and then just add extension builders
@@ -142,6 +142,8 @@ This will then help aid in finishing the value layout system to be intelligent a
 
 
 sbt "testOnly TypeTests"
+
+sbt "testOnly FunctionalSemanticTreeIntegrationTests"
 sbt "testOnly FunctionalAstTests"
 
 most likely well start with the basetypes registry, register all general base types and operators, which will require the ast and semantic evaluation.
@@ -149,3 +151,23 @@ most likely well start with the basetypes registry, register all general base ty
 What do I need to do? I need to make sure my syntax trees look good, and hook up my basetypes operator registry to actually test automatic series of value descriptions, one test for base line, one test for recursion
 
 Then baseline operators, and operators recursion
+
+Alright this going pretty good just got to change a view things around here.
+
+instead of getting a operators for the actual type instead, you are going to use typenames and only one operator registry in the type registry.
+
+
+this is called operators in the TypeRegistry if you noticed.
+
+so we are no longer goign to be returning ValueOperators from register type, we are also 
+
+we also no longer need strange functions in the registry such as literal or value, that is bad.
+
+I also removed TypeRegistry, object instead we just create a new TypeRegistry object and pipelin all the stuff, no need to create a new object type for this just one function populating a new TypeRegistry object.
+
+I transitioned BaseTypes object, into base helper, now the syntax of registry needs to be fixed to fit the actual expected paradigm in the comments of operators.scala
+
+using our handy dandy FunctionalId
+
+# Spaces
+# Perfect Problem Definition

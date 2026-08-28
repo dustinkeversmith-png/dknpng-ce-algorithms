@@ -49,6 +49,13 @@ class FunctionalSemanticTreeIntegrationTests extends munit.FunSuite:
         val semanticTree = new FunctionalSemanticTree(args)
         val program = semanticTree.build(syntaxTree)
 
+        args("a").operators("=")(3.0)
+        args("b").operators("=")(4.0)
+        args("limit").operators("=")(8.0)
+        args("enabled").operators("=")(1.toByte)
+        args("output").operators("=")(-100.0)
+        mutableParticle("position")(1)("value").operators("=")(99.0)
+
 
         // Asserting program correctness.
         assert(program.statements.length == 9)
@@ -70,9 +77,9 @@ class FunctionalSemanticTreeIntegrationTests extends munit.FunSuite:
 
         val returned = evaluator.evaluate()
 
-        (args["output"].operators("equals")(14.0))
-        (args["particle"][1].operators("equals")(14.0))
-        semanticTree.stack("result").operators("equals")(14.0)
+        assert(args("output").operators("equals")(14.0).truth())
+        assert(args("particle")(1).operators("equals")(14.0).truth())
+        assert(semanticTree.stack("result").operators("equals")(14.0).truth())
 
 
     test("semantic tree can own an empty stack or receive an existing stack"):

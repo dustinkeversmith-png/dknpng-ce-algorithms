@@ -1,5 +1,56 @@
 
 class TypeTests extends munit.FunSuite:
+  test("base type pack registers sizes and lambda operators into an empty registry"):
+    val registry = new TypeRegistry()
+    assert(registry.sizes.isEmpty)
+    assert(registry.operators.isEmpty)
+
+    val baseTypes = new BaseTypes(registry)
+    baseTypes.register()
+
+    assert(registry.sizes("byte") == 1L)
+    assert(registry.sizes("short") == 2L)
+    assert(registry.sizes("int") == 4L)
+    assert(registry.sizes("long") == 8L)
+    assert(registry.sizes("float") == 4L)
+    assert(registry.sizes("double") == 8L)
+    assert(registry.operators("double").operator_set.contains("+"))
+    assert(registry.operators("double").operator_set.contains("="))
+
+    val value = new Value("registered", Vector.empty, Map("value" -> "double"))
+    value.registry = registry
+    value.index_fields()
+    value.allocate()
+    value.operators("=")(6.0)
+
+    assert(value.operators("+")(4.0).operators("equals")(10.0).truth())
+
+    val leftStructure = new Value(
+      "leftStructure",
+      Vector.empty,
+      Map("x" -> "double", "count" -> "int")
+    )
+    leftStructure.registry = registry
+    leftStructure.index_fields()
+    leftStructure.allocate()
+    leftStructure("x").operators("=")(2.5)
+    leftStructure("count").operators("=")(3)
+
+    val rightStructure = new Value(
+      "rightStructure",
+      Vector.empty,
+      Map("x" -> "double", "count" -> "int")
+    )
+    rightStructure.registry = registry
+    rightStructure.index_fields()
+    rightStructure.allocate()
+    rightStructure("x").operators("=")(1.5)
+    rightStructure("count").operators("=")(4)
+
+    val combinedStructure = leftStructure.operators("+")(rightStructure)
+    assert(combinedStructure("x").operators("equals")(4.0).truth())
+    assert(combinedStructure("count").operators("equals")(7).truth())
+
   test("type creation and base functional iteration type and size natures"):
     val positionType = new ValueType(
       "Array",

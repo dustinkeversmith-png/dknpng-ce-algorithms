@@ -36,7 +36,7 @@ final class ValueOperators:
     this.operator_set(fid_hash) = [FunctionalId, OperatorFunction]
 
   //
-  def operator(name: String, value: Value, arguments: Vector[Value]): Value =
+  def operator(name: String, arguments: Vector[Value]): Value =
     // The args will then end up being string mode and Values in this case which the values will probably be mutated so they wont really be copied around but possibly referenced.
     this.operator_set.getOrElse(
       name,

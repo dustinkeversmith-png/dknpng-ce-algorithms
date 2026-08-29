@@ -4,7 +4,6 @@
 
 import value.*
 import problem.space.*
-import scala.collection.mutable.HashMap
 
 class CompiledInvariantTests extends munit.FunSuite:
 
@@ -52,33 +51,20 @@ class CompiledInvariantTests extends munit.FunSuite:
       )
     )))
 
-    def compiledPredicate(name: String, tree: FunctionalSemanticTree): Predicate =
-      Predicate(
-        name,
-        (candidate: Value) =>
-          val result = new Evaluator(
-            tree,
-            HashMap[String, Value]("candidate" -> candidate)
-          ).evaluate().getOrElse(
-            throw new AssertionError(s"Compiled predicate '$name' did not return a Value")
-          )
-          result.registry.caster.retrieve(result.base_type_name(), result) != 0.0
-      )
-
     val lowerInvariant = Invariant(
       "amount >= 0",
-      compiledPredicate("P1", lowerBoundTree),
+      new Predicate("P1", FunctionalTree(Vector(ReturnStatement(Some(lowerBoundSyntax))))),
       _ => "amount was below zero"
     )
     val upperInvariant = Invariant(
       "amount <= 10",
-      compiledPredicate("P2", upperBoundTree),
+      new Predicate("P2", FunctionalTree(Vector(ReturnStatement(Some(upperBoundSyntax))))),
       _ => "amount was above ten"
     )
     val sequentialInvariant = lowerInvariant && upperInvariant
     val unifiedInvariant = Invariant(
       "P1 && P2",
-      compiledPredicate("P1 && P2", unifiedInvariantTree),
+      new Predicate("P1 && P2", FunctionalTree(Vector(ReturnStatement(Some(unifiedInvariantSyntax))))),
       value => sequentialInvariant.violationMessage(value)
     )
 

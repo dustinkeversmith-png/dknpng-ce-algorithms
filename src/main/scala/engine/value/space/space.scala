@@ -38,9 +38,17 @@ trait Space:
   /** All invariants evaluated when checking or validating a Value. */
   def invariants: List[Invariant] = this.structural_invariants ++ this.semantic_invariants
 
+  /** One compiled invariant program used by both validation and synthesis. */
+  def unified_invariant: Invariant =
+    require(this.invariants.nonEmpty, "A generative Space requires at least one compiled invariant")
+    this.invariants.tail.foldLeft(this.invariants.head)((combined, invariant) => combined && invariant)
+
   /** Constructive generator: guaranteed structurally well-formed */
   /** Guaranteed to the produced generation satisfies the semantic_invariants and structural invariants and is a part of this space */
-  def generate(): Value
+  def generator: Generator
+
+  /** Execute the Space's synthesized generator program. */
+  def generate(): Value = this.generator.generate(s"${this.value_type.name}_generated")
 
   /** Optional generator/enumeration for discrete or bounded spaces */
   def enumerate: LazyList[Value] = LazyList.empty
@@ -60,13 +68,14 @@ trait Space:
       def value_type = self.value_type
       def structural_invariants = (self.structural_invariants ++ that.structural_invariants).distinct
       def semantic_invariants = (self.semantic_invariants ++ that.semantic_invariants).distinct
-
-      def generate(): Value =
-        val candidate = self.generate()
-        if that.contains(candidate) then candidate
-        else self.enumerate.find(that.contains).getOrElse(
-          throw new IllegalStateException("Intersection produced an empty or unsynthesizable space")
-        )
+      val generator: Generator =
+        val composed = new Generator(value_type, unified_invariant.predicate, math.max(self.generator.maximum_models, that.generator.maximum_models))
+        composed.terminal_grammar = self.generator.terminal_grammar.clone()
+        that.generator.terminal_grammar.foreach { case (typeName, terminals) =>
+          if !composed.terminal_grammar.contains(typeName) then composed.terminal_grammar(typeName) = terminals
+        }
+        composed.synthesize()
+        composed
 
       override def enumerate: LazyList[Value] = self.enumerate.filter(that.contains)
 
@@ -82,15 +91,21 @@ trait Space:
       def semantic_invariants = List(
         Invariant(
           s"(${self.description} || ${that.description})",
-          Predicate("union_disjunction", (v: Value) => self.contains(v) || that.contains(v)),
+          self.unified_invariant.predicate || that.unified_invariant.predicate,
           v => s"Value violated both spaces in union"
         )
       )
 
       override def contains(s: Value): Boolean = self.contains(s) || that.contains(s)
 
-      def generate(): Value =
-        if scala.util.Random.nextBoolean() then self.generate() else that.generate()
+      val generator: Generator =
+        val composed = new Generator(value_type, unified_invariant.predicate, self.generator.maximum_models + that.generator.maximum_models)
+        composed.terminal_grammar = self.generator.terminal_grammar.clone()
+        that.generator.terminal_grammar.foreach { case (typeName, terminals) =>
+          if !composed.terminal_grammar.contains(typeName) then composed.terminal_grammar(typeName) = terminals
+        }
+        composed.synthesize()
+        composed
 
       override def enumerate: LazyList[Value] =
         self.enumerate.zipAll(that.enumerate, null, null).flatMap {
@@ -107,14 +122,14 @@ trait Space:
       def structural_invariants = self.structural_invariants
       def semantic_invariants = self.semantic_invariants :+ Invariant(
         s"NOT(${that.description})",
-        Predicate("not_contained", (v: Value) => !that.contains(v)),
+        !that.unified_invariant.predicate,
         v => s"Value fell inside excluded subspace ${that.description}"
       )
-
-      def generate(): Value =
-        self.enumerate.find(v => !that.contains(v)).getOrElse(
-          throw new IllegalStateException("Difference resulted in an empty space")
-        )
+      val generator: Generator =
+        val composed = new Generator(value_type, unified_invariant.predicate, self.generator.maximum_models)
+        composed.terminal_grammar = self.generator.terminal_grammar.clone()
+        composed.synthesize()
+        composed
 
       override def enumerate: LazyList[Value] = self.enumerate.filterNot(that.contains)
 
@@ -169,13 +184,21 @@ trait Space:
       // Nearest valid neighbor projection via enumeration/distance minimizing
       enumerate.minByOption(cand => distance(s, cand)).getOrElse(s)
 
-  /** Subspace projection onto specific member paths or sub-dimensions */
-  def projectSubspace(targetType: ValueType, extractor: Value => Value): Space =
+  /** Subspace projection described by its own compiled invariant and synthesized generator program. */
+  def projectSubspace(
+    targetType: ValueType,
+    projectedInvariant: Invariant,
+    terminalGrammar: HashMap[String, Vector[GeneratorTerminal]],
+    maximumModels: Int = 32
+  ): Space =
     val parent = this
     new Space:
       def description = s"Proj_${targetType.name}(${parent.description})"
       def value_type = targetType
       def structural_invariants = Nil
-      def semantic_invariants = Nil
-      def generate() = extractor(parent.generate())
-      override def enumerate = parent.enumerate.map(extractor)
+      def semantic_invariants = List(projectedInvariant)
+      val generator: Generator =
+        val projectedGenerator = new Generator(targetType, projectedInvariant.predicate, maximumModels)
+        projectedGenerator.terminal_grammar = terminalGrammar.clone()
+        projectedGenerator.synthesize()
+        projectedGenerator

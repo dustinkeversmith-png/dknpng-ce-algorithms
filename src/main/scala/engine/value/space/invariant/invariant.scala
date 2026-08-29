@@ -12,28 +12,28 @@ case class Invariant(
 ):
   def holds(s: Value): Boolean = predicate(s)
 
-  /** Conjunction (∧): Both invariants must hold */
+  /** Conjunction (∧): Both compiled invariant programs must hold */
   def &&(other: Invariant): Invariant =
     Invariant(
       s"(${name} ∧ ${other.name})",
-      Predicate(s"(${name} ∧ ${other.name})", (s: Value) => this.predicate(s) && other.predicate(s)),
+      this.predicate && other.predicate,
       s => 
         if !this.predicate(s) then this.violationMessage(s)
         else other.violationMessage(s)
     )
 
-  /** Disjunction (∨): At least one invariant must hold */
+  /** Disjunction (∨): At least one compiled invariant program must hold */
   def ||(other: Invariant): Invariant =
     Invariant(
       s"(${name} ∨ ${other.name})",
-      Predicate(s"(${name} ∨ ${other.name})", (s: Value) => this.predicate(s) || other.predicate(s)),
+      this.predicate || other.predicate,
       s => s"${this.violationMessage(s)} AND ${other.violationMessage(s)}"
     )
 
-  /** Negation (¬): Inverts the predicate */
+  /** Negation (¬): Inverts the compiled predicate AST */
   def unary_! : Invariant =
     Invariant(
       s"¬(${name})",
-      Predicate(s"¬(${name})", (s: Value) => !this.predicate(s)),
+      !this.predicate,
       s => s"Failed negation: '${name}' was unexpectedly true"
     )

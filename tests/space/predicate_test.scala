@@ -4,7 +4,6 @@
 
 import value.*
 import problem.space.*
-import scala.collection.mutable.HashMap
 
 class CompiledPredicateTests extends munit.FunSuite:
 
@@ -31,14 +30,9 @@ class CompiledPredicateTests extends munit.FunSuite:
       _.isInstanceOf[BinaryOperatorNode]
     ))
 
-    val compiledPredicate = Predicate(
+    val compiledPredicate = new Predicate(
       "non-negative mass and non-zero id",
-      (candidate: Value) =>
-        val arguments = HashMap[String, Value]("candidate" -> candidate)
-        val result = new Evaluator(predicateTree, arguments).evaluate().getOrElse(
-          throw new AssertionError("The compiled predicate did not return a Value")
-        )
-        result.registry.caster.retrieve(result.base_type_name(), result) != 0.0
+      FunctionalTree(Vector(ReturnStatement(Some(predicateSyntax))))
     )
 
     val validParticle = new Value("validParticle", particleType)

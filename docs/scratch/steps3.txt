@@ -14,9 +14,18 @@ Tier 1: Strategic Planner / Auditor (Meta-Level)            │
 │  - Injects intermediate constraints & localized cost goals
 ? yeah like maybe solving a sub problem, finding something out or something
 
-
 searches over Program Skeletons and Context Modifiers
 Strategy Primitives (Skeletons): High-level archetypes (e.g., DivideAndConquer(spatialPartition), AccumulationLoop(reducer), PipelineMap(transform))
+
+Measurement Strategic Effectiveness
+ Domain Volume Pruning after applying strategy skeleton
+ 
+ Trace Diversity / Residual Velocity
+ 
+ Bandit / Meta-Utility Score
+ 
+
+
 
 Context Invariants ($\mathcal{I}_{\text{stage}}$): Pre- and post-conditions injected into specific pipeline boundaries (e.g., "After stage 1, array elements must be partitioned by spatial octant")
 
@@ -31,6 +40,16 @@ Tier 2: Constructive Operator Synthesizer (AST-Level)      │
 The Constructive Synthesizer (Step-by-Step Operator Mutation)
 
 Trace-Driven Construction: At step $k$, execute the partial program against sample inputs to inspect the trace $\Sigma_k = \text{Evaluator.run}(s_0 \dots s_k)$.
+
+ Hamming/Type Distance, Information-Theoretic Entropy, Path Residual
+ 
+ Abstract Interpreation & Symbolic Domain Overlap
+
+ Type-Directed & Hoare Triplet Weakest
+ 
+ MCTS MDP construction
+ 
+ 
 
 Step Residual / Value Expectation: Measure how much closer the memory state $\Sigma_k$ is to the target invariant $\mathcal{I}_{\text{stage}}$
 

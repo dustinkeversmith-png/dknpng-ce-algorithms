@@ -6,10 +6,14 @@ So our solution will be like a program tree or exectuable series of instruction 
 
 So like for example I want to combinatorially assign like strategy suggestions or try different strategies or constructed strategies from a pool say spacial partitioning strategies, or other types of hints or suggestions, adding different cost functions, constraint functions, kind of like a high level auditor, goes in sees the result, tries to change like a high level strategy
 
+new types can be created as well with out system to go higher level but im not sure how that works out well, or creating new operations might be interesting, less line per line verification of the code, so would make sense, write a function once use it multiple times some how in the problem space
+
+
 Tier 1: Strategic Planner / Auditor (Meta-Level)            │
 │  - Selects pipeline decomposition & algorithmic scaffolds   │
 │  - Injects intermediate constraints & localized cost goals
 ? yeah like maybe solving a sub problem, finding something out or something
+
 
 searches over Program Skeletons and Context Modifiers
 Strategy Primitives (Skeletons): High-level archetypes (e.g., DivideAndConquer(spatialPartition), AccumulationLoop(reducer), PipelineMap(transform))
@@ -24,6 +28,13 @@ Tier 2: Constructive Operator Synthesizer (AST-Level)      │
 │  - Fills AST slots (Statements, Loops, Inverted Assignments)│
 │  - Traces state execution & calculates step residuals
 
+The Constructive Synthesizer (Step-by-Step Operator Mutation)
+
+Trace-Driven Construction: At step $k$, execute the partial program against sample inputs to inspect the trace $\Sigma_k = \text{Evaluator.run}(s_0 \dots s_k)$.
+
+Step Residual / Value Expectation: Measure how much closer the memory state $\Sigma_k$ is to the target invariant $\mathcal{I}_{\text{stage}}$
+
+Constraint Inversion: When an invariant is strict (e.g., variable bounds), directly synthesize inverted assignment nodes instead of guessing random operations.
 
 Functional Semantic Tree (Execution / Value Space)         │
 │  - Stack Frames, Type Registry, Memory Mutation Traces

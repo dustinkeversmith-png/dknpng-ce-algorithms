@@ -141,12 +141,12 @@ trait Space:
     else
       val perturbations = LazyList(step, -step)
       perturbations.flatMap { delta =>
-        val neighbor = new Value(s"${s.name}_neighbor", s.value_type)
+        val neighbor = new Value(s"${s.name}_neighbor", s)
         neighbor.attach_registry(s.registry)
         // Perturb primitive values or tensor dimensions
         if s.shape.nonEmpty then
           (0 until s.shape.product).to(LazyList).map { idx =>
-            val clone = new Value(s"${s.name}_n$idx", s.value_type)
+            val clone = new Value(s"${s.name}_n$idx", s)
             clone.attach_registry(s.registry)
             val curr = s.registry.caster.retrieve("double", s.reference_element(Array(idx)))
             clone.reference_element(Array(idx)).operator("=")(s.registry.caster.cast("double", curr + delta))

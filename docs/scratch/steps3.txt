@@ -25,7 +25,18 @@ Measurement Strategic Effectiveness
  Bandit / Meta-Utility Score
  
 
+Strategy Template Skeletons
 
+ AST skeletons containing Hole Nodes or SlotNode rewrite directives
+ 
+ Sub-Agent mutates by refining a hole, splitting a stage, lifting bounds
+ 
+Subroutine Management
+
+ Library Learning (Anti-Unifiication / E-Graphs)
+ when the system detects repeated AST subgraphs it can abstract them to prevent evaluation
+ 
+ 
 
 Context Invariants ($\mathcal{I}_{\text{stage}}$): Pre- and post-conditions injected into specific pipeline boundaries (e.g., "After stage 1, array elements must be partitioned by spatial octant")
 

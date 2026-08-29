@@ -1,0 +1,51 @@
+Bounds assumes the type of int, since I am wanting a general inverter and composer we need to find a work around
+
+We are generating a fairly simple lower upper predicate conjuction, can we instead generate a fairly complex fst parsed function or expression, which doesn't use easy to invert invariant conditions?
+
+In this case when we are also creating the generator, we are hard coding the creation of the generation function with prior knowledge, we essentially need a function which can take any invariant function/tree and any valuetype or value and automatically create the generating function which satisies the invariant
+
+Same thing with the rejection sampling just use a single complex predicate function, we need a generator function automatically assembles itself around the internal shapes of the values
+
+# Again keep all of this inside of the generative_test otherwise this is actually very good!
+
+
+# Move these test implementations into their value/space implementations
+
+# Invariants & Predicates
+Create and validate a couple complex structural invariants
+ 1. excluding the imposed structural invariants already on the ValueType specificaition, possibly introducing variable dimension vectors or other things into the Value description
+ 2. Constraints on dimensions, non-empty bounds, array sizes, or coordinate alignments.
+Create and validate a couple complex semantic invariants
+ 1. Functional constraints evaluated by the FunctionalSemanticTree / Evaluator (e.g., $x^2 + y^2 = 25$, mass conservation, or non-negativity).
+ 2. Domain & Value Bounds: Memory values must reside within primitive domains (e.g., double domain bounds or integer bit-width limits).
+
+Create and validate implementations for conjuction disjunction and other composition operators which im not sure which ones their are, oh negation, yes
+
+and finally create generators for each of these different invariants as a form of a stress test
+
+
+1. This is cool although you didn't use the fst parsing for describing the invariants which is a requirement for some of these, there will no longer be lambda based invariant predicate sources
+
+1.5 for each of these tests you must use the pipeline in generative_test.scala in order to create the generator automatically from the parsed invariant programs as stated before
+
+2. In one test you hand coded a generator, which is not ever going to happen
+
+3. then you can update space to use a program for the generate function rather than the current generate function, 
+
+# Space
+find out what other things contribute to a set containment, and also implement other set functions like unions, neighborhood concepts, projections 
+
+Interset:
+ May need to the composabiliy algebra on the embedded invariants rather than just ++
+
+Containment:
+ imposed Value Invariants
+ if s.t != value_type.name && !s.shape.sameElements(value_type.shape) then false
+ 
+ 
+# Next we create a problem specification
+
+ 
+
+
+

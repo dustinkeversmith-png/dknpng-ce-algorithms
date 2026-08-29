@@ -1,0 +1,86 @@
+1. Set up index_fields and allocate on Value to happen within the value structure upon value type definition changes or construction
+
+2. we we are going to differentiate between the name of a value and the value type, as you can see the word particle is used on both the left and right structure
+
+val leftStructure = new Value("particle", positionType)
+val rightStructure = new Value("particle", positionType)
+
+// This should be the name of the particle so ParticleA or ParticleB but both share the same value type with name "Position" and so that should be the type name used for resolution
+
+3. Instead of using .registry on value make a function called attach_registry() with the registry
+
+4. now instead of using valueRegistry externally to register operators, can just register through the value which should store a reference to the shared type registry
+
+5. the next step is the syntax reduction, we can keep all the underlying helper functions like reference_element, caster retrieve etc, all that stuff get refrence, etc but it would be nice if you could add support for operator overloads as similar as possible to something like this
+
+this_value_type[0,0,0,0]["id"] = 2;
+
+something like this will use all syntax like operator calling 
+
+and like this for the comments above
+
+// position[0] = 1;
+    // position[1] = 2;
+    // position[2] = 3;
+
+
+6. next step is probably optimizing look up in the actual value memory using the index only, lets see
+
+
+for example, we dont need to be vectorizing the index and filtering it, we instead just need to be accessing it just like a standard map, for example in 
+
+reference_element, 
+
+val indexedPaths = this.index.keys.toVector
+        .filter(path => path.endsWith(directPath))
+        .filter(path => path.matches(""".*\[\d+\]"""))
+        .sortBy(_.length)
+
+should instead just be like using offset math using the total size and the element size, dont really even need to use the index, the index is mainly just keeping track of the size of the total class and per member sizes so you can just use math to get accurate memory views....
+
+so get rid of all this weird sorting and the index is now just going to use the type registry to get a nice size for everything, then use memory math, and for elements you would just move the memory view, copy over the relevant type information, and a updated dimensionality representing the selection
+
+
+same thing, we dont really need all these paths in the index...
+
+in reference_member we are just going to do the same thing, add a override that includes elementIndex information, otherwise default to first one, calculate the offsets, etc and you can just go ahead return the actual Value around this thing...
+
+7. next step is to differentiate more on the iterator specifications
+
+# fst compilation
+
+
+
+1. now that we have the adequate registry with the base top operations
+
+in evaluator, we really dont have to create a evaluated value with a hard coded value of double, if theres a return type described in the function program we are going to have to use that information or copy over the value type
+
+var evaluatedValue = new Value("program", Vector.empty, Map("value" -> "double"))
+
+2. we dont really need to store the registry on the tree, we are just going to use the registries stored on the values from now on 
+
+3. remove any assumptions about the base type pack in the evaluator a good example is StringLiteralNode
+
+4. we have to expand the current program grammar to support most basic c style stuff like for loops, stuff like calling member functions like vector.length() parsing parameters, mini function calls, declaring functions
+
+support the indexing type scheme we were using (0,...)["member"] stuff 
+
+supports curly brace blocks and all that
+
+5. then we are going to use our knew registry system, feel free to use the base registry as a base 
+
+
+in fst_test.scala implement this domain 
+    test("build simple c like domain registry with arrays, vectors, .length, and all that then build a test program over the domain"):
+        
+		
+then write a program like sorting a vector, use a real argument and return out a Value of the sorted vector
+
+# then finally defining operators using the string language of the functions in a domain style staying away from the lambda modes!
+
+
+1. we are still using .registry, we can ahead and make a function called attachRegistry which will go ahead and recurisevly attach the registry to the child member types if they dont already have a attached registry, which would be like another ValueType
+
+2. why are attaching the registry twice, once on the type and once on the values?
+
+3. 

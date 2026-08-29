@@ -1,4 +1,6 @@
 
+package value
+
 import scala.collection.mutable.HashMap
 
 
@@ -10,6 +12,7 @@ final case class NumericLiteralNode(value: Double) extends SemanticNode
 final case class StringLiteralNode(value: String) extends SemanticNode
 final case class MemberAccessNode(value: SemanticNode, member: String) extends SemanticNode
 final case class IndexAccessNode(value: SemanticNode, index: SemanticNode) extends SemanticNode
+final case class MultiIndexAccessNode(value: SemanticNode, indices: Vector[SemanticNode]) extends SemanticNode
 final case class FunctionCallNode(function: SemanticNode, arguments: Vector[SemanticNode]) extends SemanticNode
 final case class UnaryOperatorNode(operator: String, value: SemanticNode) extends SemanticNode
 final case class BinaryOperatorNode(left: SemanticNode, operator: String, right: SemanticNode) extends SemanticNode
@@ -35,14 +38,17 @@ final case class IfNode(
     elseBranch: Option[BlockNode]
 ) extends SemanticNode
 final case class WhileNode(condition: SemanticNode, body: BlockNode) extends SemanticNode
+final case class ForNode(initializer: Option[SemanticNode], condition: Option[SemanticNode], update: Option[SemanticNode], body: BlockNode) extends SemanticNode
 final case class ReturnNode(value: Option[SemanticNode]) extends SemanticNode
+final case class FunctionParameterNode(valueType: String, name: String)
+final case class FunctionDeclarationNode(returnType: String, name: String, parameters: Vector[FunctionParameterNode], body: BlockNode) extends SemanticNode
 
 
 final class FunctionalSemanticTree:
 
     var args: HashMap[String, Value] = HashMap.empty
     var stack: HashMap[String, Value] = HashMap.empty
-    var registry: TypeRegistry = new BaseTypes().registerAll()
+    var functions: HashMap[String, FunctionDeclarationNode] = HashMap.empty
 
     def this(args: HashMap[String, Value]) =
         this()
@@ -55,7 +61,6 @@ final class FunctionalSemanticTree:
 
     def set_args(args: HashMap[String, Value]): Unit =
         this.args = args
-        if args.nonEmpty then this.registry = args.head._2.registry
 
     def set_stack(stack: HashMap[String, Value]): Unit =
         this.stack = stack
@@ -67,7 +72,11 @@ final class FunctionalSemanticTree:
         var statementIndex = 0
 
         while statementIndex < syntaxTree.statements.length do
-            semanticStatements = semanticStatements :+ this.convert(syntaxTree.statements(statementIndex))
+            val semanticStatement = this.convert(syntaxTree.statements(statementIndex))
+            semanticStatements = semanticStatements :+ semanticStatement
+            semanticStatement match
+                case function: FunctionDeclarationNode => this.functions(function.name) = function
+                case _ =>
             statementIndex += 1
 
         this.program = ProgramNode(semanticStatements)
@@ -85,6 +94,13 @@ final class FunctionalSemanticTree:
                 MemberAccessNode(this.convert(value), name)
             case Index(value, index) =>
                 IndexAccessNode(this.convert(value), this.convert(index))
+            case MultiIndex(value, indices) =>
+                var semanticIndices: Vector[SemanticNode] = Vector.empty
+                var index = 0
+                while index < indices.length do
+                    semanticIndices = semanticIndices :+ this.convert(indices(index))
+                    index += 1
+                MultiIndexAccessNode(this.convert(value), semanticIndices)
             case Call(function, arguments) =>
                 var semanticArguments: Vector[SemanticNode] = Vector.empty
                 var argumentIndex = 0
@@ -127,5 +143,25 @@ final class FunctionalSemanticTree:
                 IfNode(this.convert(condition), semanticThen, semanticElse)
             case WhileStatement(condition, body) =>
                 WhileNode(this.convert(condition), this.convert(body).asInstanceOf[BlockNode])
+            case ForStatement(initializer, condition, update, body) =>
+                ForNode(
+                    initializer.map(this.convert),
+                    condition.map(this.convert),
+                    update.map(this.convert),
+                    this.convert(body).asInstanceOf[BlockNode]
+                )
             case ReturnStatement(value) =>
                 ReturnNode(value.map(this.convert))
+            case FunctionDeclaration(returnType, name, parameters, body) =>
+                var semanticParameters: Vector[FunctionParameterNode] = Vector.empty
+                var parameterIndex = 0
+                while parameterIndex < parameters.length do
+                    val parameter = parameters(parameterIndex)
+                    semanticParameters = semanticParameters :+ FunctionParameterNode(parameter.valueType.name, parameter.name.name)
+                    parameterIndex += 1
+                FunctionDeclarationNode(
+                    returnType.name,
+                    name.name,
+                    semanticParameters,
+                    this.convert(body).asInstanceOf[BlockNode]
+                )

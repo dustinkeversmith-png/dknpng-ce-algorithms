@@ -1,5 +1,7 @@
 // Bootstrap pack for the singular C-style computer types.
 // A TypeRegistry starts empty; this pack explicitly adds sizes and lambda operators.
+package value
+
 import java.nio.ByteBuffer
 
 final class BaseTypes:

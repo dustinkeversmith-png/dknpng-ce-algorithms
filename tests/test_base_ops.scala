@@ -1,5 +1,7 @@
 // I added test_base_ops right in here for testing the base operations between all the basic types using Value that has type of any base type.
 
+import value.*
+
 class BaseOperatorTests extends munit.FunSuite:
   test("register base overloads with FunctionalId and run them on fields of a new type"):
     // Registers all of the types.

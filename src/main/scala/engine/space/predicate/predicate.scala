@@ -1,5 +1,7 @@
 package problem.space
 
+import value.*
+
 /**
  * Named predicate S => Boolean with Boolean combinators.
  */

@@ -1,3 +1,5 @@
+package value
+
 import scala.collection.mutable.HashMap
 
 final class Caster(var registry: TypeRegistry):

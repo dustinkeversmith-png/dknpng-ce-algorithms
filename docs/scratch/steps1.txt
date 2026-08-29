@@ -1,0 +1,183 @@
+1. in base_helper.scala create a new type registry object, then register all of the functions for the base types and their size using this exact syntax
+
+this.registry.register_type("int", 4)
+this.registry.register_operator("int", ["add", ["a": "int", "b": "int"]], (a,b)=> a+b)
+
+
+2. in registry.scala 
+ensure that register type succesfully registers the size of the name and creates a new ValueOperators for the type
+
+3. ensure that register_operator in registry.scala calls through to the underlying ValueOperators register function using the function .register on the ValueOperators associated with the name.
+
+4. in operators.register keep the functional id as FunctionalId the name parameter is the name of the function so like "add" for example, then the argument list is the function signature so 
+
+{name, type} where the name is the name in the function, and type is the string associated with the value type of the 
+
+5. in the register function ensure that the fid_hash is the represented conjuction using the id, and all of the type names in the arguments of the functionalId passed into register, then also provide as show.
+
+6. then in .operator of operators.scala keep the signature, the arguments are a vector of mutable values in this case, use the name and the compounded Value.type_names to hash and find the correct operator overload, then execute the function on the arguments set. 
+
+7. Once you have all of the base type sizes and the built registry ensure that value.scala is using the registry correctly in terms of the provided size look up, specifically the case where just the singular
+
+8. Now in test_base_ops.scala give an example of creating a new type, then running operators on its fields
+
+
+# Next steps
+
+1. in value.scala lets stay away from using updated, since it creates a new copy of the object and just go ahead update the map normally without copying it. line 61
+
+2. ValueType.equals doesn't have to have a type of Any in it, it will always need to be a ValueType 
+
+3. why does FieldIndex have valueType in it.
+why does MemoryRef have ValueType in it
+
+should we store the registry in the ValueType as well for sizing lookups?
+
+
+4. Value.populate using this.index.updated pretty sure this is copying the index around which isn't neccessary if you can make it mutable that would be good
+
+
+5. in iterate_dimension it appears as though you are porting the index but also it doesn't specify which dimension we are iterating, since there can be multiple, so I added a indices and offset so that you can get a iterator starting at an offset into the which ever dimensions chosen
+
+
+6. i've updated the test_value.scala test "multidimensional shape and internal field iteration to include these examples which I want supported in their exact syntax I specify here
+
+    // Basic indexing and assignment
+    position[0] = 1;
+    position[1] = 2;
+    position[2] = 3;
+
+    // Multidimensional and nested assignment
+    this_value_type[0,0,0,0]["id"] = 2;
+    this_value_type[0,0,0,0]["mass"] = 3.0;
+	
+this is my prefered style of syntax
+// Basic indexing and assignment
+    position[0] = 1;
+    position[1] = 2;
+    position[2] = 3;
+
+    // Multidimensional iteration
+    val iter = position.iterator();
+    // This should return the value as the value type on next etc 
+
+    // Multidimensional and nested assignment
+    this_value_type[0,0,0,0]["id"] = 2;
+    this_value_type[0,0,0,0]["mass"] = 3.0;
+
+    // Iterating values example
+    val iter =  this_value_type[0,0,0,0].iterator()
+    // .value resolves the iterator and will return the nest type as a Value 
+    Value id = iter.value() 
+    // Return values like this ensures that we never have any types we just use the specified types.
+    Value mass = iter.next().value()
+	
+ensure that these work or atleast the closest syntax available to this, indexing and offseting is really supposed to just be used internally to map into the values quickly.
+
+
+7. value.scala the function names apply are confusing at .apply memebrNmae and applyElement index, also the elementINdex will often be multi dimensional here or at least a single elment array
+I changed it to reference_member and reference_element, and changed ElementIndex to a Int array
+
+
+8. i've removed 
+Value.number
+Value.set_number
+Value.integer 
+
+and any other type references, these are no longer needed and we will only ever use Value 
+
+
+Be sure to never bring these functions back, the compares directly on the Value
+
+9. operators argument list will only contain Values in this case and they will be just a vector of values. 
+
+Value.operators changing the argument list to not contain any of the forbidden type names.
+
+Value.operators, we now no longer use any number setting or anything like that, so I removed the case switch on types, so no longer bring this back in the value either.
+
+
+instead what you will do will just call 
+
+this.registry.operator
+
+which will subsequently use the internal operators hash map, construct the stringed id for look up and run the operator lambda passing in the correct values
+
+registry.scala
+  def operator(name: String, Value: Array[Value] ):
+    
+complete this function
+
+Value.
+  def operator(name: String)(arguments: Value*): Value =
+    var valueArguments: Vector[Value] = Vector.empty
+    var argumentIndex = 0
+
+
+    this.registry.operators(name, arguments)
+	
+ complete this function
+ 
+ by constructing the argument list, and also passing self into the argument list for opreators taht may need self such as .equals
+
+1. you aren't allowed to use this.numeric_value or any casting outside of the actual operation itself, I removed your bad code, or anything like that in the BaseTypes, and really BaseTypes wasn't supposed to be its own objects, everything just has to work with the registry, so my advice would be to stop using these while loops to implement the operations, code them all by hand in the form I showed you
+
+this.registry.register_operator("int", ["add", ["a": "int", "b": "int"]], (a,b)=> a+b)
+
+or the closest you can, but store all of the casting logic inside of the function body, since we know what the types are based on the type signature okay buddy. Maybe you could register some casters but not this way. I removed your evil functions you were doing hard coding these functions and stuff
+
+make sure you code it out okay, you are using all this arguments(0) I really dont like that okay buddy?
+
+this.comparison_value(a, arguments(0),
+
+I really dont like that okay buddy, it needs to be cleaner with any specific casting logic insie of the the actual function using possibly a caster registry okay buddy?
+
+val ten = value.operator("+")(baseTypes.result_value("double", 4.0))
+
+alright buddy something 
+
+Next you need to stop doing it like this buddy for the indexing
+
+// position[0] = 1;
+    // position[1] = 2;
+    // position[2] = 3;
+    position.reference_element(Array(0)).operator("=")(baseValues.result_value("int", 1.0))
+    position.reference_element(Array(1)).operator("=")(baseValues.result_value("int", 2.0))
+    position.reference_element(Array(2)).operator("=")(baseValues.result_value("int", 3.0))
+	
+you see those comments up there buddy, reference_element is too much buddy
+
+    // this_value_type[0,0,0,0]["id"] = 2;
+    // this_value_type[0,0,0,0]["mass"] = 3.0;
+    val selectedValue = this_value_type.reference_element(Array(0, 0, 0, 0))
+    selectedValue.reference_member("id").operator("=")(baseValues.result_value("long", 2.0))
+    selectedValue.reference_member("mass").operator("=")(baseValues.result_value("double", 3.0))
+	
+you see this buddy right here, you see the comments, thats how its supposed to look buddy
+
+# Next steps
+
+ add operators for new larger structs using recursive operators in the definition for the base types, to test base or leaf node resolution
+ 
+ declaring a value type as the underlying type having a type name, or a custom type name which isn't a base operator
+
+#
+
+1. Use Value as the base type instead of generics on Space
+
+Space.value_type is our ValueType now, 
+
+got rid of space.invariants since we already have our two invariant categories 
+
+2. Removed any generic references or represntation from invariant.scala
+
+3. Now our predicates are compiled functionals instead of against a singular value we can create multi complex predicate functions
+
+ use operators inside of the evaluation loop of the functional tree to recurse to the base operators
+
+
+ test adding new value types with different operator sets
+ 
+Complete space and generators
+
+Start Problem and Generators
+

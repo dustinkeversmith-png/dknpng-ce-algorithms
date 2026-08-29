@@ -1,3 +1,5 @@
+package value
+
 import fastparse.*, JavaWhitespace.*
 
 sealed trait Expr
@@ -6,6 +8,7 @@ case class Literal(value: Double) extends Expr
 case class StringLiteral(value: String) extends Expr
 case class Member(value: Expr, name: String) extends Expr
 case class Index(value: Expr, index: Expr) extends Expr
+case class MultiIndex(value: Expr, indices: Vector[Expr]) extends Expr
 case class Call(function: Expr, arguments: Vector[Expr]) extends Expr
 case class Parenthesized(value: Expr) extends Expr
 case class UnaryOp(op: String, value: Expr) extends Expr
@@ -17,7 +20,10 @@ case class Declare(valueType: TypeName, name: Variable, initialValue: Option[Exp
 case class Block(statements: Vector[Expr]) extends Expr
 case class IfStatement(condition: Expr, thenBranch: Block, elseBranch: Option[Block]) extends Expr
 case class WhileStatement(condition: Expr, body: Block) extends Expr
+case class ForStatement(initializer: Option[Expr], condition: Option[Expr], update: Option[Expr], body: Block) extends Expr
 case class ReturnStatement(value: Option[Expr]) extends Expr
+case class Parameter(valueType: TypeName, name: Variable)
+case class FunctionDeclaration(returnType: TypeName, name: Variable, parameters: Vector[Parameter], body: Block) extends Expr
 
 case class FunctionalTree(statements: Vector[Expr]):
   def syntax_tree(): String =
@@ -50,6 +56,13 @@ case class FunctionalTree(statements: Vector[Expr]):
           line(depth, s"$label Index")
           render(value, depth + 1, "value:")
           render(index, depth + 1, "index:")
+        case MultiIndex(value, indices) =>
+          line(depth, s"$label MultiIndex")
+          render(value, depth + 1, "value:")
+          var index = 0
+          while index < indices.length do
+            render(indices(index), depth + 1, s"index[$index]:")
+            index += 1
         case Call(function, arguments) =>
           line(depth, s"$label Call")
           render(function, depth + 1, "function:")
@@ -99,11 +112,31 @@ case class FunctionalTree(statements: Vector[Expr]):
           line(depth, s"$label While")
           render(condition, depth + 1, "condition:")
           render(body, depth + 1, "body:")
+        case ForStatement(initializer, condition, update, body) =>
+          line(depth, s"$label For")
+          initializer match
+            case Some(value) => render(value, depth + 1, "initializer:")
+            case None => line(depth + 1, "initializer: none")
+          condition match
+            case Some(value) => render(value, depth + 1, "condition:")
+            case None => line(depth + 1, "condition: none")
+          update match
+            case Some(value) => render(value, depth + 1, "update:")
+            case None => line(depth + 1, "update: none")
+          render(body, depth + 1, "body:")
         case ReturnStatement(value) =>
           line(depth, s"$label Return")
           value match
             case Some(returnedValue) => render(returnedValue, depth + 1, "value:")
             case None => line(depth + 1, "value: none")
+        case FunctionDeclaration(returnType, name, parameters, body) =>
+          line(depth, s"$label FunctionDeclaration(\"${returnType.name}\", \"${name.name}\")")
+          var parameterIndex = 0
+          while parameterIndex < parameters.length do
+            val parameter = parameters(parameterIndex)
+            line(depth + 1, s"parameter[$parameterIndex]: ${parameter.valueType.name} ${parameter.name.name}")
+            parameterIndex += 1
+          render(body, depth + 1, "body:")
 
     line(0, "FunctionalTree")
     var statementIndex = 0
@@ -171,8 +204,12 @@ private def memberSuffix[$: P]: P[Expr => Expr] = P(
 ).map(memberName => (value: Expr) => Member(value, memberName))
 
 private def indexSuffix[$: P]: P[Expr => Expr] = P(
-  "[" ~ expr ~ "]"
-).map(index => (value: Expr) => Index(value, index))
+  "[" ~ expr.rep(min = 1, sep = ",") ~ "]"
+).map { indices =>
+  (value: Expr) =>
+    if indices.length == 1 then Index(value, indices.head)
+    else MultiIndex(value, indices.toVector)
+}
 
 private def callSuffix[$: P]: P[Expr => Expr] = P(
   "(" ~ expr.rep(sep = ",") ~ ")"
@@ -238,6 +275,7 @@ def expr[$: P]: P[Expr] = P(
 private def ifKeyword[$: P]: P[Unit] = P("if" ~~ !CharIn("a-zA-Z0-9_"))
 private def elseKeyword[$: P]: P[Unit] = P("else" ~~ !CharIn("a-zA-Z0-9_"))
 private def whileKeyword[$: P]: P[Unit] = P("while" ~~ !CharIn("a-zA-Z0-9_"))
+private def forKeyword[$: P]: P[Unit] = P("for" ~~ !CharIn("a-zA-Z0-9_"))
 private def returnKeyword[$: P]: P[Unit] = P("return" ~~ !CharIn("a-zA-Z0-9_"))
 
 def declaration[$: P]: P[Declare] = P(
@@ -261,13 +299,31 @@ def whileStatement[$: P]: P[WhileStatement] = P(
   whileKeyword ~ "(" ~ expr ~ ")" ~ block
 ).map { case (condition, body) => WhileStatement(condition, body) }
 
+def forStatement[$: P]: P[ForStatement] = P(
+  forKeyword ~ "(" ~ (declaration | expr).? ~ ";" ~ expr.? ~ ";" ~ expr.? ~ ")" ~ block
+).map { case (initializer, condition, update, body) =>
+  ForStatement(initializer, condition, update, body)
+}
+
+def parameter[$: P]: P[Parameter] = P(
+  identifierPart ~ identifierPart
+).map { case (valueType, name) => Parameter(TypeName(valueType), Variable(name)) }
+
+def functionDeclaration[$: P]: P[FunctionDeclaration] = P(
+  identifierPart ~ identifierPart ~ "(" ~ parameter.rep(sep = ",") ~ ")" ~ block
+).map { case (returnType, name, parameters, body) =>
+  FunctionDeclaration(TypeName(returnType), Variable(name), parameters.toVector, body)
+}
+
 def returnStatement[$: P]: P[ReturnStatement] = P(
   returnKeyword ~ expr.?
 ).map(ReturnStatement.apply)
 
 def statement[$: P]: P[Expr] = P(
+  functionDeclaration |
   ifStatement |
   whileStatement |
+  forStatement |
   block |
   ((returnStatement | declaration | expr) ~ ";")
 )
@@ -286,4 +342,3 @@ def parseProgram(source: String): Parsed[FunctionalTree] =
 
 // Usage:
 // val Parsed.Success(ast, _) = parse("value += other * 2.0", expr(_))
-

@@ -1,4 +1,6 @@
 
+import value.*
+
 class TypeTests extends munit.FunSuite:
   test("base type pack registers sizes and lambda operators into an empty registry"):
     val emptyRegistry = new TypeRegistry()

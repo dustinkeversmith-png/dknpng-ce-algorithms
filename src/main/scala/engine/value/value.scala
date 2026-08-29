@@ -1,4 +1,7 @@
 // 1. Import the mutable package
+
+package value
+
 import scala.collection.mutable.HashMap
 import scala.collection.mutable.LinkedHashMap
 import java.nio.ByteBuffer

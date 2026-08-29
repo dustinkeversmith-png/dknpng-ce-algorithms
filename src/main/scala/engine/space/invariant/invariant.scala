@@ -1,5 +1,7 @@
 package problem.space
 
+import value.*
+
 /**
  * First-class invariant with diagnostic reporting and Boolean combinators.
  */

@@ -29,6 +29,48 @@ final class TypeRegistry:
       this.operators(name) = new ValueOperators()
     this.operators(name).register(id, operator)
 
+  def register_operator(id: FunctionalId, program: ProgramNode): Unit =
+    val valueType = id.arguments.getOrElse(
+      "a",
+      id.arguments.values.headOption.getOrElse(
+        throw new IllegalArgumentException(s"FST operator '${id.name}' requires at least one typed argument")
+      )
+    )
+    this.register_operator(valueType, id, program)
+
+  def register_operator(name: String, id: FunctionalId, program: ProgramNode): Unit =
+    val programOperator: OperatorFunction = (functionalId, value, arguments) =>
+      var parameterNames = functionalId.arguments.keys.toVector
+      var statementIndex = 0
+
+      while statementIndex < program.statements.length do
+        program.statements(statementIndex) match
+          case function: FunctionDeclarationNode if function.parameters.length == arguments.length + 1 =>
+            parameterNames = function.parameters.map(_.name)
+            statementIndex = program.statements.length
+          case _ => statementIndex += 1
+
+      val operatorValues = value +: arguments
+      require(
+        parameterNames.length == operatorValues.length,
+        s"FST operator '${functionalId.name}' expected ${parameterNames.length} Values but received ${operatorValues.length}"
+      )
+
+      val evaluatorArguments = HashMap.empty[String, Value]
+      var argumentIndex = 0
+      while argumentIndex < parameterNames.length do
+        evaluatorArguments(parameterNames(argumentIndex)) = operatorValues(argumentIndex)
+        argumentIndex += 1
+
+      val semanticTree = new FunctionalSemanticTree()
+      semanticTree.program = program
+      val evaluator = new Evaluator(semanticTree, evaluatorArguments)
+      evaluator.evaluate().getOrElse(
+        throw new IllegalStateException(s"FST operator '${functionalId.name}' did not evaluate a Value")
+      )
+
+    this.register_operator(name, id, programOperator)
+
   def register_cast(name: String, retrieve: Array[Byte] => Double, insert: Double => Array[Byte]): Unit =
     this.caster.register(name, retrieve, insert)
 

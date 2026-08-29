@@ -65,12 +65,12 @@ class FunctionalSemanticTreeIntegrationTests extends munit.FunSuite:
         assert(function.body.statements(1).isInstanceOf[ForStatement])
 
         val args = HashMap[String, Value]("values" -> values)
-        val semanticTree = new FunctionalSemanticTree(args)
+        val semanticTree = new FunctionalSemanticTree()
         val program = semanticTree.build(syntaxTree)
         assert(program.statements.head.isInstanceOf[FunctionDeclarationNode])
         assert(semanticTree.functions.contains("sort"))
 
-        val returned = new Evaluator(semanticTree).evaluate().getOrElse(
+        val returned = new Evaluator(semanticTree, args).evaluate().getOrElse(
             throw new AssertionError("The sorting function did not return a Value")
         )
 
@@ -127,7 +127,7 @@ class FunctionalSemanticTreeIntegrationTests extends munit.FunSuite:
             "particle" -> mutableParticle
         )
 
-        val semanticTree = new FunctionalSemanticTree(args)
+        val semanticTree = new FunctionalSemanticTree()
         val program = semanticTree.build(syntaxTree)
 
         val argumentValues = args.valuesIterator
@@ -157,21 +157,22 @@ class FunctionalSemanticTreeIntegrationTests extends munit.FunSuite:
         assert(program.statements.last == ReturnNode(Some(VariableNode("output"))))
 
 
-        val evaluator = new Evaluator(semanticTree)
+        val evaluator = new Evaluator(semanticTree, args)
 
         val returned = evaluator.evaluate()
 
         val expected = registry.caster.cast("double", 14.0)
         assert(registry.caster.retrieve("byte", args("output").operator("equals")(expected)) == 1.0)
         assert(registry.caster.retrieve("byte", args("particle").reference_member("position").reference_element(Array(1)).reference_member("value").operator("equals")(expected)) == 1.0)
-        assert(registry.caster.retrieve("byte", semanticTree.stack("result").operator("equals")(expected)) == 1.0)
+        assert(registry.caster.retrieve("byte", evaluator.stack("result").operator("equals")(expected)) == 1.0)
 
 
-    test("semantic tree can own an empty stack or receive an existing stack"):
+    test("evaluator can own an empty stack or receive an existing stack"):
         val args = HashMap.empty[String, Value]
-        val ownedStackTree = new FunctionalSemanticTree(args)
-        assert(ownedStackTree.stack.isEmpty)
+        val semanticTree = new FunctionalSemanticTree()
+        val ownedStackEvaluator = new Evaluator(semanticTree, args)
+        assert(ownedStackEvaluator.stack.isEmpty)
 
         val passedStack = HashMap.empty[String, Value]
-        val passedStackTree = new FunctionalSemanticTree(args, passedStack)
-        assert(passedStackTree.stack eq passedStack)
+        val passedStackEvaluator = new Evaluator(semanticTree, args, passedStack)
+        assert(passedStackEvaluator.stack eq passedStack)

@@ -83,4 +83,14 @@ then write a program like sorting a vector, use a real argument and return out a
 
 2. why are attaching the registry twice, once on the type and once on the values?
 
-3. 
+
+
+# Now test building a operator from the fst and adding it to the registry, to using as an evaluation step
+
+# Then embedd our value system into space and test generative guided generation, and different invariant types
+
+ now its possible to compile our generator as a function over the value set, then compile our predicates into other functions, but we need some kind of topology on generator to skip invalid generations, how would this work?
+ 
+ the topology on generation is probably related into neigbor style values
+ 
+# with our space and values we then build our problem descriptions, so hopefully space describes our domains,  

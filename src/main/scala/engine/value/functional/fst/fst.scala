@@ -46,24 +46,7 @@ final case class FunctionDeclarationNode(returnType: String, name: String, param
 
 final class FunctionalSemanticTree:
 
-    var args: HashMap[String, Value] = HashMap.empty
-    var stack: HashMap[String, Value] = HashMap.empty
     var functions: HashMap[String, FunctionDeclarationNode] = HashMap.empty
-
-    def this(args: HashMap[String, Value]) =
-        this()
-        this.set_args(args)
-
-    def this(args: HashMap[String, Value], stack: HashMap[String, Value]) =
-        this()
-        this.set_args(args)
-        this.set_stack(stack)
-
-    def set_args(args: HashMap[String, Value]): Unit =
-        this.args = args
-
-    def set_stack(stack: HashMap[String, Value]): Unit =
-        this.stack = stack
         
     var program: ProgramNode = ProgramNode(Vector.empty)
 

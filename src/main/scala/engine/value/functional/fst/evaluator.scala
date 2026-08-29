@@ -16,9 +16,20 @@ trait Evalulator:
 
 final class Evaluator(var tree: FunctionalSemanticTree) extends Evalulator:
 
+    var args: HashMap[String, Value] = HashMap.empty
+    var stack: HashMap[String, Value] = HashMap.empty
     var returned: Option[Value] = None
     var has_returned: Boolean = false
     var scopes: Vector[HashMap[String, Value]] = Vector.empty
+
+    def this(tree: FunctionalSemanticTree, args: HashMap[String, Value]) =
+        this(tree)
+        this.args = args
+
+    def this(tree: FunctionalSemanticTree, args: HashMap[String, Value], stack: HashMap[String, Value]) =
+        this(tree)
+        this.args = args
+        this.stack = stack
 
     def evaluate(): Option[Value] =
         this.returned = None
@@ -54,13 +65,13 @@ final class Evaluator(var tree: FunctionalSemanticTree) extends Evalulator:
             if this.scopes(scopeIndex).contains(name) then return this.scopes(scopeIndex)(name)
             scopeIndex -= 1
 
-        this.tree.stack.get(name)
-            .orElse(this.tree.args.get(name))
+        this.stack.get(name)
+            .orElse(this.args.get(name))
             .getOrElse(throw new NoSuchElementException(s"Unknown value: $name"))
 
     def store_value(name: String, value: Value): Unit =
         if this.scopes.nonEmpty then this.scopes.last(name) = value
-        else this.tree.stack(name) = value
+        else this.stack(name) = value
 
     def find_registry(typeName: String): TypeRegistry =
         var scopeIndex = this.scopes.length - 1
@@ -71,12 +82,12 @@ final class Evaluator(var tree: FunctionalSemanticTree) extends Evalulator:
                 if registry.sizes.contains(typeName) || registry.operators.contains(typeName) then return registry
             scopeIndex -= 1
 
-        val stackValues = this.tree.stack.valuesIterator
+        val stackValues = this.stack.valuesIterator
         while stackValues.hasNext do
             val registry = stackValues.next().registry
             if registry.sizes.contains(typeName) || registry.operators.contains(typeName) then return registry
 
-        val argumentValues = this.tree.args.valuesIterator
+        val argumentValues = this.args.valuesIterator
         while argumentValues.hasNext do
             val registry = argumentValues.next().registry
             if registry.sizes.contains(typeName) || registry.operators.contains(typeName) then return registry
@@ -85,10 +96,35 @@ final class Evaluator(var tree: FunctionalSemanticTree) extends Evalulator:
 
     def declared_value(name: String, valueType: String): Value =
         val registry = this.find_registry(valueType)
-        val declaredValue = new Value(name, Vector.empty, Map("value" -> valueType))
-        declaredValue.fields("value").registry = registry
-        declaredValue.t = valueType
-        declaredValue.attach_registry(registry)
+        var matchingValue: Option[Value] = None
+        var scopeIndex = this.scopes.length - 1
+
+        while scopeIndex >= 0 && matchingValue.isEmpty do
+            val scopeValues = this.scopes(scopeIndex).valuesIterator
+            while scopeValues.hasNext && matchingValue.isEmpty do
+                val value = scopeValues.next()
+                if value.t == valueType then matchingValue = Some(value)
+            scopeIndex -= 1
+
+        val stackValues = this.stack.valuesIterator
+        while stackValues.hasNext && matchingValue.isEmpty do
+            val value = stackValues.next()
+            if value.t == valueType then matchingValue = Some(value)
+
+        val argumentValues = this.args.valuesIterator
+        while argumentValues.hasNext && matchingValue.isEmpty do
+            val value = argumentValues.next()
+            if value.t == valueType then matchingValue = Some(value)
+
+        matchingValue match
+            case Some(value) =>
+                val declaredValue = new Value(name, value)
+                declaredValue.attach_registry(registry)
+            case None =>
+                val declaredValue = new Value(name, Vector.empty, Map("value" -> valueType))
+                declaredValue.fields("value").registry = registry
+                declaredValue.t = valueType
+                declaredValue.attach_registry(registry)
 
     def condition_is_true(value: Value): Boolean =
         value.registry.caster.retrieve(value.base_type_name(), value) != 0.0

@@ -23,9 +23,7 @@ final class Evaluator(var tree: FunctionalSemanticTree) extends Evalulator:
 
     def evaluate_program(program: ProgramNode): Value =
         var evaluatedValue = new Value("program", Vector.empty, Map("value" -> "double"))
-        evaluatedValue.registry = this.tree.registry
-        evaluatedValue.index_fields()
-        evaluatedValue.allocate()
+        evaluatedValue.attach_registry(this.tree.registry)
         var statementIndex = 0
 
         while statementIndex < program.statements.length && !this.has_returned do
@@ -36,9 +34,7 @@ final class Evaluator(var tree: FunctionalSemanticTree) extends Evalulator:
 
     def evaluate_block(block: BlockNode): Value =
         var evaluatedValue = new Value("block", Vector.empty, Map("value" -> "double"))
-        evaluatedValue.registry = this.tree.registry
-        evaluatedValue.index_fields()
-        evaluatedValue.allocate()
+        evaluatedValue.attach_registry(this.tree.registry)
         var statementIndex = 0
 
         while statementIndex < block.statements.length && !this.has_returned do
@@ -70,9 +66,7 @@ final class Evaluator(var tree: FunctionalSemanticTree) extends Evalulator:
                 this.evaluate_node(value).reference_element(Array(elementIndex))
             case NumericLiteralNode(value) =>
                 val literalValue = new Value("literal", Vector.empty, Map("value" -> "double"))
-                literalValue.registry = this.tree.registry
-                literalValue.index_fields()
-                literalValue.allocate()
+                literalValue.attach_registry(this.tree.registry)
                 this.tree.registry.caster.insert("double", literalValue, value)
             case StringLiteralNode(_) =>
                 throw new UnsupportedOperationException("String Value registration is not available in the base type pack")
@@ -100,9 +94,7 @@ final class Evaluator(var tree: FunctionalSemanticTree) extends Evalulator:
                 targetValue.operator(operator)(rightValue)
             case DeclarationNode(valueType, name, initialValue) =>
                 val stackValue = new Value(name, Vector.empty, Map("value" -> valueType))
-                stackValue.registry = this.tree.registry
-                stackValue.index_fields()
-                stackValue.allocate()
+                stackValue.attach_registry(this.tree.registry)
                 initialValue.foreach(value => stackValue.operator("=")(this.evaluate_node(value)))
                 this.tree.stack(name) = stackValue
                 stackValue
@@ -116,15 +108,11 @@ final class Evaluator(var tree: FunctionalSemanticTree) extends Evalulator:
                         case Some(branch) => this.evaluate_block(branch)
                         case None =>
                             val emptyIfValue = new Value("if", Vector.empty, Map("value" -> "double"))
-                            emptyIfValue.registry = this.tree.registry
-                            emptyIfValue.index_fields()
-                            emptyIfValue.allocate()
+                            emptyIfValue.attach_registry(this.tree.registry)
                             emptyIfValue
             case WhileNode(condition, body) =>
                 var evaluatedValue = new Value("while", Vector.empty, Map("value" -> "double"))
-                evaluatedValue.registry = this.tree.registry
-                evaluatedValue.index_fields()
-                evaluatedValue.allocate()
+                evaluatedValue.attach_registry(this.tree.registry)
                 var conditionValue = this.evaluate_node(condition)
                 while !this.has_returned && this.tree.registry.caster.retrieve(conditionValue.base_type_name(), conditionValue) != 0.0 do
                     evaluatedValue = this.evaluate_block(body)
@@ -135,9 +123,7 @@ final class Evaluator(var tree: FunctionalSemanticTree) extends Evalulator:
                 this.has_returned = true
                 this.returned.getOrElse {
                     val emptyReturnValue = new Value("return", Vector.empty, Map("value" -> "double"))
-                    emptyReturnValue.registry = this.tree.registry
-                    emptyReturnValue.index_fields()
-                    emptyReturnValue.allocate()
+                    emptyReturnValue.attach_registry(this.tree.registry)
                     emptyReturnValue
                 }
             case FunctionCallNode(_, _) =>

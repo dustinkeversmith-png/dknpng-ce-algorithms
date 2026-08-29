@@ -26,9 +26,7 @@ class BaseOperatorTests extends munit.FunSuite:
     )
 
     // Sets registry indexes the fields and then sets the values.
-    pairType.registry = registry
-    pairType.index_fields()
-    pairType.allocate()
+    pairType.attach_registry(registry)
 
     pairType.reference_member("left").operator("=")(registry.caster.cast("int", 4.0))
     pairType.reference_member("right").operator("=")(registry.caster.cast("int", 6.0))

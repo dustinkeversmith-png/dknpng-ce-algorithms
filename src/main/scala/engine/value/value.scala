@@ -194,7 +194,7 @@ final class Value(
   def this(name: String, valueType: ValueType) =
     this(name, valueType.shape, valueType.fields)
     this.t = valueType.t
-    this.registry = valueType.registry
+    this.attach_registry(valueType.registry)
 
   require(this.name.nonEmpty, "A value name cannot be empty")
   require(this.shape.forall(_ > 0), "Shape dimensions must all be positive")
@@ -213,8 +213,22 @@ final class Value(
 
 
   var memory: Array[Byte] = Array.emptyByteArray
+  var memory_offset: Long = 0L
   var total_size: Long = 0L
   var tails: Vector[Long] = Vector.empty
+
+  // Value construction now finalizes its direct member layout and owns allocated memory immediately.
+  this.index_fields()
+  this.allocate()
+
+  def attach_registry(typeRegistry: TypeRegistry): Value =
+    this.registry = typeRegistry
+    this.index_fields()
+    this.allocate()
+    this
+
+  def register_operator(id: FunctionalId, operatorFunction: OperatorFunction): Unit =
+    this.registry.register_operator(this.t, id, operatorFunction)
 
   // Allocates enough memory to store the necessary value types in size.
   // Requires recursive collection of type name size references for accumulation, in the process can collect helper indexers
@@ -265,54 +279,6 @@ final class Value(
       valueType.byte_size = shapedSize
       valueType.byte_size
 
-    def populate(valueType: ValueType, startOffset: Long, path: String): Unit =
-      def populateElement(elementOffset: Long, elementPath: String): Unit =
-        if valueType.fields.nonEmpty then
-          var nextOffset = elementOffset
-          val fieldNames = valueType.fields.keys.toVector
-          var fieldIndex = 0
-
-          while fieldIndex < fieldNames.length do
-            val fieldName = fieldNames(fieldIndex)
-            val fieldType = valueType.fields(fieldName)
-            val fieldPath =
-              if elementPath.isEmpty then fieldName
-              else s"$elementPath.$fieldName"
-
-            this.index(fieldPath) = FieldIndex(nextOffset, fieldType.byte_size, fieldType)
-
-            if fieldType.fields.nonEmpty || fieldType.shape.nonEmpty then
-              populate(fieldType, nextOffset, fieldPath)
-
-            nextOffset += fieldType.byte_size
-            fieldIndex += 1
-
-      def populateDimensions(
-        dimensionIndex: Int,
-        linearIndex: Long,
-        dimensionPath: String
-      ): Unit =
-        if dimensionIndex == valueType.shape.length then
-          val elementOffset = startOffset + linearIndex * valueType.element_size
-          val completePath = path + dimensionPath
-
-          if dimensionPath.nonEmpty then
-            this.index(completePath) = FieldIndex(elementOffset, valueType.element_size, valueType)
-
-          populateElement(elementOffset, completePath)
-        else
-          var coordinate = 0
-          while coordinate < valueType.shape(dimensionIndex) do
-            populateDimensions(
-              dimensionIndex + 1,
-              linearIndex * valueType.shape(dimensionIndex).toLong + coordinate.toLong,
-              dimensionPath + s"[$coordinate]"
-            )
-            coordinate += 1
-
-      if valueType.shape.isEmpty then populateElement(startOffset, path)
-      else populateDimensions(0, 0L, "")
-
     // DONT EVEN USE A ITERATOR JUST USE A FUCKING LOOP OR RECURSIVE FUNCTION CALL PLEASE COCK SUCKER.
     // val fieldDetails = value.fields.iterator.map { case (fieldName, fieldType) =>
     //   val length = byteSize(fieldType)
@@ -322,6 +288,16 @@ final class Value(
     // }.toMap
     measure(this)
     this.total_size = this.byte_size
+
+    var nextFieldOffset = 0L
+    val directFieldNames = this.fields.keys.toVector
+    var directFieldIndex = 0
+    while directFieldIndex < directFieldNames.length do
+      val fieldName = directFieldNames(directFieldIndex)
+      val fieldType = this.fields(fieldName)
+      this.index(fieldName) = FieldIndex(nextFieldOffset, fieldType.byte_size, fieldType)
+      nextFieldOffset += fieldType.byte_size
+      directFieldIndex += 1
 
     var tailValues: Vector[Long] = Vector.empty
     var dimensionIndex = 0
@@ -337,7 +313,6 @@ final class Value(
       dimensionIndex += 1
 
     this.tails = tailValues
-    populate(this, 0L, "")
     this.index
 
   // UNTIL YOU GOT THAT RIGHT DONT EVEN THINK ABOUT PUSHING OR DOING ANYTHING LIKE THAT.
@@ -362,7 +337,7 @@ final class Value(
   def index_dimension(indices: Int*): FieldIndex =
     require(indices.length == this.shape.length, s"Expected ${this.shape.length} dimension indices but received ${indices.length}")
 
-    var dimensionPath = ""
+    var linearIndex = 0L
     var dimensionIndex = 0
     while dimensionIndex < indices.length do
       val coordinate = indices(dimensionIndex)
@@ -370,13 +345,10 @@ final class Value(
         coordinate >= 0 && coordinate < this.shape(dimensionIndex),
         s"Dimension $dimensionIndex index $coordinate is outside 0 until ${this.shape(dimensionIndex)}"
       )
-      dimensionPath += s"[$coordinate]"
+      linearIndex = linearIndex * this.shape(dimensionIndex).toLong + coordinate.toLong
       dimensionIndex += 1
 
-    this.index.getOrElse(
-      dimensionPath,
-      throw new NoSuchElementException(s"Dimension path has not been indexed: $dimensionPath")
-    )
+    FieldIndex(this.memory_offset + linearIndex * this.element_size, this.element_size, this)
 
   
 
@@ -407,50 +379,45 @@ final class Value(
   def index_value(indices: Seq[Int], fieldNames: String*): Vector[FieldIndex] =
     require(indices.length == this.shape.length, s"Expected ${this.shape.length} dimension indices but received ${indices.length}")
 
-    var dimensionPath = ""
-    var dimensionIndex = 0
-    while dimensionIndex < indices.length do
-      val coordinate = indices(dimensionIndex)
-      require(
-        coordinate >= 0 && coordinate < this.shape(dimensionIndex),
-        s"Dimension $dimensionIndex index $coordinate is outside 0 until ${this.shape(dimensionIndex)}"
-      )
-      dimensionPath += s"[$coordinate]"
-      dimensionIndex += 1
+    val element = this.index_dimension(indices*)
 
     var selectedFields: Vector[FieldIndex] = Vector.empty
     var fieldNameIndex = 0
     while fieldNameIndex < fieldNames.length do
       val fieldName = fieldNames(fieldNameIndex)
-      val fieldPath =
-        if dimensionPath.isEmpty then fieldName
-        else s"$dimensionPath.$fieldName"
-
-      selectedFields = selectedFields :+ this.index.getOrElse(
-        fieldPath,
-        throw new NoSuchElementException(s"Value field has not been indexed: $fieldPath")
-      )
+      val field = this.index.getOrElse(fieldName, throw new NoSuchElementException(s"Value field has not been indexed: $fieldName"))
+      selectedFields = selectedFields :+ FieldIndex(element.offset + field.offset, field.length, field.valueType)
       fieldNameIndex += 1
 
     selectedFields
 
   def iterate_value(fieldNames: String*): Iterator[FieldIndex] =
-    val indexedFields = this.index.toVector
-      .filter { case (path, _) => !path.matches("""(\[\d+\])+""") }
-      .filter { case (path, _) =>
-        if fieldNames.isEmpty then true
-        else
-          var matches = false
-          var fieldNameIndex = 0
-          while fieldNameIndex < fieldNames.length && !matches do
-            val fieldName = fieldNames(fieldNameIndex)
-            matches = path == fieldName || path.endsWith(s".$fieldName")
-            fieldNameIndex += 1
-          matches
-      }
-      .sortBy { case (path, fieldIndex) => (fieldIndex.offset, path) }
+    var selectedFields: Vector[FieldIndex] = Vector.empty
+    var elementCount = 1L
+    var dimensionIndex = 0
+    while dimensionIndex < this.shape.length do
+      elementCount *= this.shape(dimensionIndex).toLong
+      dimensionIndex += 1
 
-    indexedFields.map { case (_, fieldIndex) => fieldIndex }.iterator
+    val selectedFieldNames =
+      if fieldNames.nonEmpty then fieldNames.toVector
+      else this.fields.keys.toVector
+
+    var linearIndex = 0L
+    while linearIndex < elementCount do
+      var fieldNameIndex = 0
+      while fieldNameIndex < selectedFieldNames.length do
+        val fieldName = selectedFieldNames(fieldNameIndex)
+        val field = this.index.getOrElse(fieldName, throw new NoSuchElementException(s"Value field has not been indexed: $fieldName"))
+        selectedFields = selectedFields :+ FieldIndex(
+          this.memory_offset + linearIndex * this.element_size + field.offset,
+          field.length,
+          field.valueType
+        )
+        fieldNameIndex += 1
+      linearIndex += 1
+
+    selectedFields.iterator
 
   // So access and iterator can be accessed [1-N][1_N_2] for the initial dimensionality, then it will finally be able to access and iterate each type, by measuring the strides, and recursive strides into the object.
 
@@ -471,72 +438,55 @@ final class Value(
 
   // Returns a Value view backed by this exact same memory array.
   def reference_member(memberName: String): Value =
-    if this.index.isEmpty then this.index_fields()
-    if this.memory.isEmpty then this.allocate()
-    this.reference(memberName)
+    this.reference_member(memberName, Array.fill(this.shape.length)(0))
 
-  // Returns an indexed Value view while keeping the parent memory as the backing storage.
-  def reference_element(elementIndex: Array[Int]): Value =
-    if this.index.isEmpty then this.index_fields()
-    if this.memory.isEmpty then this.allocate()
+  def reference_member(memberName: String, elementIndex: Array[Int]): Value =
+    val field = this.index.getOrElse(memberName, throw new NoSuchElementException(s"Unknown indexed member: $memberName"))
+    val elementOffset =
+      if this.shape.isEmpty then this.memory_offset
+      else this.index_dimension(elementIndex*).offset
 
-    var directPath = ""
-    var dimensionIndex = 0
-    while dimensionIndex < elementIndex.length do
-      directPath += s"[${elementIndex(dimensionIndex)}]"
-      dimensionIndex += 1
-    if this.index.contains(directPath) then this.reference(directPath)
-    else
-      val indexedPaths = this.index.keys.toVector
-        .filter(path => path.endsWith(directPath))
-        .filter(path => path.matches(""".*\[\d+\]"""))
-        .sortBy(_.length)
+    val referencedValue =
+      if field.valueType.fields.isEmpty then
+        new Value(field.valueType.name, Vector.empty, Map("value" -> field.valueType))
+      else
+        new Value(field.valueType.name, field.valueType)
 
-      if indexedPaths.isEmpty then
-        throw new NoSuchElementException(s"Value '${this.name}' has no indexed element $elementIndex")
-
-      this.reference(indexedPaths.head)
-
-  def reference(path: String): Value =
-    val field = this.index.getOrElse(path, throw new NoSuchElementException(s"Unknown indexed path: $path"))
-    val referencedValue = new Value(field.valueType.name, field.valueType.shape, field.valueType.fields)
     referencedValue.t = field.valueType.t
     referencedValue.registry = field.valueType.registry
     referencedValue.memory = this.memory
+    referencedValue.memory_offset = elementOffset + field.offset
     referencedValue.total_size = field.length
     referencedValue.element_size = field.valueType.element_size
     referencedValue.byte_size = field.length
-    referencedValue.index.clear()
+    referencedValue
 
-    if field.valueType.fields.isEmpty && field.valueType.shape.isEmpty then
-      referencedValue.shape = Vector.empty
-      referencedValue.index("value") = field
-    else
-      if path.endsWith("]") then
-        referencedValue.shape = Vector.empty
-        if referencedValue.fields.size == 1 then
-          val elementField = referencedValue.fields(referencedValue.fields.keys.head)
-          if elementField.shape.isEmpty && elementField.fields.isEmpty then
-            referencedValue.t = elementField.t
-            referencedValue.registry = elementField.registry
+  // Returns an indexed Value view while keeping the parent memory as the backing storage.
+  def reference_element(elementIndex: Array[Int]): Value =
+    val element = this.index_dimension(elementIndex*)
+    val referencedValue = new Value(this.name, Vector.empty, this.fields)
+    referencedValue.t = this.t
+    referencedValue.registry = this.registry
+    referencedValue.memory = this.memory
+    referencedValue.memory_offset = element.offset
+    referencedValue.total_size = this.element_size
+    referencedValue.element_size = this.element_size
+    referencedValue.byte_size = this.element_size
 
-      val indexedPaths = this.index.keys.toVector
-      var indexedPathIndex = 0
-      while indexedPathIndex < indexedPaths.length do
-        val indexedPath = indexedPaths(indexedPathIndex)
-        var relativePath = ""
-
-        if indexedPath.startsWith(path + ".") then
-          relativePath = indexedPath.substring(path.length + 1)
-        else if indexedPath.startsWith(path + "[") then
-          relativePath = indexedPath.substring(path.length)
-
-        if relativePath.nonEmpty then
-          referencedValue.index(relativePath) = this.index(indexedPath)
-
-        indexedPathIndex += 1
+    if referencedValue.fields.size == 1 then
+      val elementField = referencedValue.fields(referencedValue.fields.keys.head)
+      if elementField.shape.isEmpty && elementField.fields.isEmpty then
+        referencedValue.t = elementField.t
+        referencedValue.registry = elementField.registry
 
     referencedValue
+
+  def reference(path: String): Value =
+    if this.index.contains(path) then this.reference_member(path)
+    else
+      val coordinates = """\[(\d+)\]""".r.findAllMatchIn(path).map(_.group(1).toInt).toArray
+      if coordinates.nonEmpty then this.reference_element(coordinates)
+      else throw new NoSuchElementException(s"Unknown indexed path: $path")
 
   def base_value(): Value =
     if this.registry.contains(this.t) && this.index.contains("value") then this
@@ -550,24 +500,41 @@ final class Value(
 
 
   def base_paths(): Vector[String] =
-    if this.index.isEmpty then this.index_fields()
-    if this.memory.isEmpty then this.allocate()
-
-    this.index.toVector
-      .filter { case (_, field) => field.valueType.fields.isEmpty && field.valueType.shape.isEmpty }
-      .sortBy { case (path, field) => (field.offset, path) }
-      .map { case (path, _) => path }
+    var paths: Vector[String] = Vector.empty
+    val fieldNames = this.fields.keys.toVector
+    var fieldIndex = 0
+    while fieldIndex < fieldNames.length do
+      val fieldName = fieldNames(fieldIndex)
+      val field = this.index(fieldName)
+      if field.valueType.fields.isEmpty && field.valueType.shape.isEmpty then
+        paths = paths :+ fieldName
+      fieldIndex += 1
+    paths
 
   def iterator(): Iterator[Value] =
     if this.index.isEmpty then this.index_fields()
     if this.memory.isEmpty then this.allocate()
 
     if this.shape.nonEmpty then
-      this.index.toVector
-        .filter { case (path, _) => path.matches("""(\[\d+\])+""") }
-        .sortBy { case (path, fieldIndex) => (fieldIndex.offset, path) }
-        .map { case (path, _) => this.reference(path) }
-        .iterator
+      var values: Vector[Value] = Vector.empty
+      var elementCount = 1
+      var dimensionIndex = 0
+      while dimensionIndex < this.shape.length do
+        elementCount *= this.shape(dimensionIndex)
+        dimensionIndex += 1
+
+      var linearIndex = 0
+      while linearIndex < elementCount do
+        val coordinates = Array.ofDim[Int](this.shape.length)
+        var remainder = linearIndex
+        dimensionIndex = this.shape.length - 1
+        while dimensionIndex >= 0 do
+          coordinates(dimensionIndex) = remainder % this.shape(dimensionIndex)
+          remainder /= this.shape(dimensionIndex)
+          dimensionIndex -= 1
+        values = values :+ this.reference_element(coordinates)
+        linearIndex += 1
+      values.iterator
     else
       this.fields.keysIterator
         .filter(fieldName => this.index.contains(fieldName))
@@ -575,11 +542,39 @@ final class Value(
 
   def value(): Value = this
 
+  def apply(indices: Int*): Value =
+    this.reference_element(indices.toArray)
+
+  def apply(memberName: String): Value =
+    this.reference_member(memberName)
+
+  def update(index: Int, assignedValue: Value): Unit =
+    this.reference_element(Array(index)).operator("=")(assignedValue)
+
+  def update(index: Int, number: Int): Unit =
+    val referencedValue = this.reference_element(Array(index))
+    referencedValue.operator("=")(referencedValue.registry.caster.cast(referencedValue.base_type_name(), number.toDouble))
+
+  def update(index: Int, number: Double): Unit =
+    val referencedValue = this.reference_element(Array(index))
+    referencedValue.operator("=")(referencedValue.registry.caster.cast(referencedValue.base_type_name(), number))
+
+  def update(memberName: String, assignedValue: Value): Unit =
+    this.reference_member(memberName).operator("=")(assignedValue)
+
+  def update(memberName: String, number: Int): Unit =
+    val referencedValue = this.reference_member(memberName)
+    referencedValue.operator("=")(referencedValue.registry.caster.cast(referencedValue.base_type_name(), number.toDouble))
+
+  def update(memberName: String, number: Double): Unit =
+    val referencedValue = this.reference_member(memberName)
+    referencedValue.operator("=")(referencedValue.registry.caster.cast(referencedValue.base_type_name(), number))
+
   def insert(bytes: Array[Byte]): Value =
     val baseValue = this.base_value()
     val field = baseValue.index("value")
     require(bytes.length == field.length.toInt, s"Expected ${field.length} bytes but received ${bytes.length}")
-    Array.copy(bytes, 0, baseValue.memory, field.offset.toInt, bytes.length)
+    Array.copy(bytes, 0, baseValue.memory, (baseValue.memory_offset + field.offset).toInt, bytes.length)
     this
 
   def operator(name: String)(arguments: Value*): Value =

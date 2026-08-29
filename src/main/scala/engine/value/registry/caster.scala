@@ -13,7 +13,7 @@ final class Caster(var registry: TypeRegistry):
     val baseValue = value.base_value()
     val field = baseValue.index("value")
     val bytes = Array.ofDim[Byte](field.length.toInt)
-    Array.copy(baseValue.memory, field.offset.toInt, bytes, 0, bytes.length)
+    Array.copy(baseValue.memory, (baseValue.memory_offset + field.offset).toInt, bytes, 0, bytes.length)
 
     this.retrieve_functions.getOrElse(
       typeName,
@@ -30,8 +30,6 @@ final class Caster(var registry: TypeRegistry):
 
   def cast(typeName: String, number: Double): Value =
     val result = new Value("result", Vector.empty, Map("value" -> typeName))
-    result.registry = this.registry
     result.fields("value").registry = this.registry
-    result.index_fields()
-    result.allocate()
+    result.attach_registry(this.registry)
     this.insert(typeName, result, number)

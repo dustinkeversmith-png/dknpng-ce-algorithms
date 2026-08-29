@@ -17,9 +17,7 @@ class TypeTests extends munit.FunSuite:
     assert(registry.operators("double").operator_set.contains("=_double_double"))
 
     val value = new Value("registered", Vector.empty, Map("value" -> "double"))
-    value.registry = registry
-    value.index_fields()
-    value.allocate()
+    value.attach_registry(registry)
     value.operator("=")(registry.caster.cast("double", 6.0))
 
     val ten = value.operator("+")(registry.caster.cast("double", 4.0))
@@ -30,9 +28,7 @@ class TypeTests extends munit.FunSuite:
       Vector.empty,
       Map("x" -> "double", "count" -> "int")
     )
-    leftStructure.registry = registry
-    leftStructure.index_fields()
-    leftStructure.allocate()
+    leftStructure.attach_registry(registry)
     leftStructure.reference_member("x").operator("=")(registry.caster.cast("double", 2.5))
     leftStructure.reference_member("count").operator("=")(registry.caster.cast("int", 3.0))
 
@@ -41,9 +37,7 @@ class TypeTests extends munit.FunSuite:
       Vector.empty,
       Map("x" -> "double", "count" -> "int")
     )
-    rightStructure.registry = registry
-    rightStructure.index_fields()
-    rightStructure.allocate()
+    rightStructure.attach_registry(registry)
     rightStructure.reference_member("x").operator("=")(registry.caster.cast("double", 1.5))
     rightStructure.reference_member("count").operator("=")(registry.caster.cast("int", 4.0))
 
@@ -69,17 +63,16 @@ class TypeTests extends munit.FunSuite:
       )
     )
 
-    particle.index_fields()
-
     assert(particle.fields("mass").t == "double")
     assert(particle.element_size == 28L)
     assert(particle.total_size == 140L)
     assert(particle.tail(0) == 28L)
-    assert(particle.index("[2].mass").offset == 64L)
-    assert(particle.index("[2].position[1].value").offset == 76L)
-    assert(particle.index("[2].position[1].value").length == 4L)
+    assert(particle.index("mass").offset == 8L)
+    assert(particle.index("position").offset == 16L)
+    assert(particle.reference_member("mass", Array(2)).memory_offset == 64L)
+    assert(particle.reference_member("position", Array(2)).reference_element(Array(1)).reference_member("value").memory_offset == 76L)
+    assert(particle.reference_member("position", Array(2)).reference_element(Array(1)).reference_member("value").total_size == 4L)
 
-    particle.allocate()
     assert(particle.memory.length == 140)
 
     val sameParticle = new Value(
@@ -122,20 +115,16 @@ class TypeTests extends munit.FunSuite:
     )
 
     val valueRegistry = new BaseTypes().registerAll()
-    position.registry = valueRegistry
-    this_value_type.registry = valueRegistry
-    position.index_fields()
-    position.allocate()
-    this_value_type.index_fields()
-    this_value_type.allocate()
+    position.attach_registry(valueRegistry)
+    this_value_type.attach_registry(valueRegistry)
 
     // Basic indexing and assignment
     // position[0] = 1;
     // position[1] = 2;
     // position[2] = 3;
-    position.reference_element(Array(0)).operator("=")(valueRegistry.caster.cast("int", 1.0))
-    position.reference_element(Array(1)).operator("=")(valueRegistry.caster.cast("int", 2.0))
-    position.reference_element(Array(2)).operator("=")(valueRegistry.caster.cast("int", 3.0))
+    position(0) = 1
+    position(1) = 2
+    position(2) = 3
 
     // Multidimensional iteration
     val iter = position.iterator();
@@ -150,9 +139,9 @@ class TypeTests extends munit.FunSuite:
     // Multidimensional and nested assignment
     // this_value_type[0,0,0,0]["id"] = 2;
     // this_value_type[0,0,0,0]["mass"] = 3.0;
-    val selectedValue = this_value_type.reference_element(Array(0, 0, 0, 0))
-    selectedValue.reference_member("id").operator("=")(valueRegistry.caster.cast("long", 2.0))
-    selectedValue.reference_member("mass").operator("=")(valueRegistry.caster.cast("double", 3.0))
+    this_value_type(0, 0, 0, 0)("id") = 2
+    this_value_type(0, 0, 0, 0)("mass") = 3.0
+    val selectedValue = this_value_type(0, 0, 0, 0)
     assert(selectedValue.shape.isEmpty)
     assert(selectedValue.fields.nonEmpty)
     assert(selectedValue.fields.contains("id"))
@@ -178,6 +167,7 @@ class TypeTests extends munit.FunSuite:
     assert(this_value_type.element_size == 28L)
     assert(this_value_type.total_size == 448L)
     assert(this_value_type.tails == Vector(224L, 112L, 56L, 28L))
+    assert(this_value_type.index.keys.toVector == Vector("id", "mass", "position"))
 
     val selectedDimension = this_value_type.index_dimension(1, 0, 1, 0)
     assert(selectedDimension.offset == 280L)
@@ -191,13 +181,13 @@ class TypeTests extends munit.FunSuite:
 
     val selectedDimensionValues = this_value_type.iterate_dimension(Array(0, 0, 0, 0), 3).toVector
     assert(selectedDimensionValues.length == 2)
-    assert(selectedDimensionValues.head.index("id").offset == 0L)
-    assert(selectedDimensionValues.last.index("id").offset == 28L)
+    assert(selectedDimensionValues.head.memory_offset == 0L)
+    assert(selectedDimensionValues.last.memory_offset == 28L)
 
     val positionAndMass = this_value_type.iterate_value("position", "mass").toVector
     assert(positionAndMass.length == 32)
-    assert(positionAndMass.head.offset == 8L)
-    assert(positionAndMass.last.offset == 436L)
+    assert(positionAndMass.head.offset == 16L)
+    assert(positionAndMass.last.offset == 428L)
 
   test("nested_structure_operator_resolution"):
 
@@ -220,18 +210,16 @@ class TypeTests extends munit.FunSuite:
     //   Vector.empty,
     //   type=positionType
     // )
-    val leftStructure = new Value("particle", positionType)
-    val rightStructure = new Value("particle", positionType)
+    val leftStructure = new Value("ParticleA", positionType)
+    val rightStructure = new Value("ParticleB", positionType)
 
-    rightStructure.registry = valueRegistry
-    leftStructure.registry = valueRegistry
+    rightStructure.attach_registry(valueRegistry)
+    leftStructure.attach_registry(valueRegistry)
 
-    
-    leftStructure.index_fields()
-    leftStructure.allocate()
-
-    rightStructure.index_fields()
-    rightStructure.allocate()
+    assert(leftStructure.name == "ParticleA")
+    assert(rightStructure.name == "ParticleB")
+    assert(leftStructure.t == "Position")
+    assert(rightStructure.t == "Position")
 
     leftStructure.reference_element(Array(0)).operator("=")(valueRegistry.caster.cast("int", 1.0))
     leftStructure.reference_element(Array(1)).operator("=")(valueRegistry.caster.cast("int", 2.0))
@@ -261,9 +249,7 @@ class TypeTests extends munit.FunSuite:
       val left = x
       val right = arguments(0)
       val result = new Value("position_result", positionType)
-      result.registry = x.registry
-      result.index_fields()
-      result.allocate()
+      result.attach_registry(x.registry)
 
 
 
@@ -279,8 +265,8 @@ class TypeTests extends munit.FunSuite:
       result
 
     val argumentTypes = Map("a" -> "Position", "b" -> "Position")
-    valueRegistry.register_operator("Position", FunctionalId("=", argumentTypes), assignOperator)
-    valueRegistry.register_operator("Position", FunctionalId("+", argumentTypes), addOperator)
+    leftStructure.register_operator(FunctionalId("=", argumentTypes), assignOperator)
+    leftStructure.register_operator(FunctionalId("+", argumentTypes), addOperator)
 
     val result = leftStructure.operator("+")(rightStructure)
     assert(result.t == "Position")

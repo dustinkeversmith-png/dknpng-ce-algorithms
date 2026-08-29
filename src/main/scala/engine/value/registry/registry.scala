@@ -5,6 +5,8 @@ import scala.collection.mutable.HashMap
 // Register of all base type sizes
 final class TypeRegistry:
 
+  var caster: Caster = new Caster(this)
+
   // A map for mapping type names eg the t variable in a ValueType, not the name of the value but the name of the type etc.
   var sizes: HashMap[String, Long] = HashMap.empty
 
@@ -25,6 +27,9 @@ final class TypeRegistry:
       name,
       throw new NoSuchElementException(s"Register type '$name' before registering its operators")
     ).register(id, operator)
+
+  def register_cast(name: String, retrieve: Array[Byte] => Double, insert: Double => Array[Byte]): Unit =
+    this.caster.register(name, retrieve, insert)
 
   def contains(name: String): Boolean = this.sizes.contains(name)
 

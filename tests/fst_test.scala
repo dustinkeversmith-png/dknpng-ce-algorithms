@@ -49,15 +49,12 @@ class FunctionalSemanticTreeIntegrationTests extends munit.FunSuite:
         val semanticTree = new FunctionalSemanticTree(args)
         val program = semanticTree.build(syntaxTree)
 
-        val baseValues = new BaseTypes()
-        baseValues.registry = semanticTree.registry
-
-        args("a").operator("=")(baseValues.result_value("double", 3.0))
-        args("b").operator("=")(baseValues.result_value("double", 4.0))
-        args("limit").operator("=")(baseValues.result_value("double", 8.0))
-        args("enabled").operator("=")(baseValues.result_value("byte", 1.0))
-        args("output").operator("=")(baseValues.result_value("double", -100.0))
-        mutableParticle.reference_member("position").reference_element(Array(1)).reference_member("value").operator("=")(baseValues.result_value("double", 99.0))
+        args("a").operator("=")(semanticTree.registry.caster.cast("double", 3.0))
+        args("b").operator("=")(semanticTree.registry.caster.cast("double", 4.0))
+        args("limit").operator("=")(semanticTree.registry.caster.cast("double", 8.0))
+        args("enabled").operator("=")(semanticTree.registry.caster.cast("byte", 1.0))
+        args("output").operator("=")(semanticTree.registry.caster.cast("double", -100.0))
+        mutableParticle.reference_member("position").reference_element(Array(1)).reference_member("value").operator("=")(semanticTree.registry.caster.cast("double", 99.0))
 
 
         // Asserting program correctness.
@@ -80,10 +77,10 @@ class FunctionalSemanticTreeIntegrationTests extends munit.FunSuite:
 
         val returned = evaluator.evaluate()
 
-        val expected = baseValues.result_value("double", 14.0)
-        assert(baseValues.read_value(args("output").operator("equals")(expected)) == 1.0)
-        assert(baseValues.read_value(args("particle").reference_member("position").reference_element(Array(1)).reference_member("value").operator("equals")(expected)) == 1.0)
-        assert(baseValues.read_value(semanticTree.stack("result").operator("equals")(expected)) == 1.0)
+        val expected = semanticTree.registry.caster.cast("double", 14.0)
+        assert(semanticTree.registry.caster.retrieve("byte", args("output").operator("equals")(expected)) == 1.0)
+        assert(semanticTree.registry.caster.retrieve("byte", args("particle").reference_member("position").reference_element(Array(1)).reference_member("value").operator("equals")(expected)) == 1.0)
+        assert(semanticTree.registry.caster.retrieve("byte", semanticTree.stack("result").operator("equals")(expected)) == 1.0)
 
 
     test("semantic tree can own an empty stack or receive an existing stack"):

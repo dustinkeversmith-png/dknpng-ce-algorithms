@@ -2,8 +2,8 @@
 
 class BaseOperatorTests extends munit.FunSuite:
   test("register base overloads with FunctionalId and run them on fields of a new type"):
-    val baseTypes = new BaseTypes()
-    val registry = baseTypes.registerAll()
+    // Registers all of the types.
+    val registry = new BaseTypes().registerAll()
 
     assert(registry.sizes("byte") == 1L)
     assert(registry.sizes("short") == 2L)
@@ -24,19 +24,23 @@ class BaseOperatorTests extends munit.FunSuite:
         "right" -> "int"
       )
     )
+
+    // Sets registry indexes the fields and then sets the values.
     pairType.registry = registry
     pairType.index_fields()
     pairType.allocate()
 
-    pairType.reference_member("left").operator("=")(baseTypes.result_value("int", 4.0))
-    pairType.reference_member("right").operator("=")(baseTypes.result_value("int", 6.0))
+    pairType.reference_member("left").operator("=")(registry.caster.cast("int", 4.0))
+    pairType.reference_member("right").operator("=")(registry.caster.cast("int", 6.0))
 
     val addedFields = integerOperators.operator(
       "add",
       Vector(pairType.reference_member("left"), pairType.reference_member("right"))
     )
 
-    assert(baseTypes.read_value(addedFields.operator("equals")(baseTypes.result_value("int", 10.0))) == 1.0)
+    val addedEqualsTen = addedFields.operator("equals")(registry.caster.cast("int", 10.0))
+    assert(registry.caster.retrieve("byte", addedEqualsTen) == 1.0)
 
     pairType.reference_member("left").operator("+=")(pairType.reference_member("right"))
-    assert(baseTypes.read_value(pairType.reference_member("left").operator("equals")(baseTypes.result_value("int", 10.0))) == 1.0)
+    val mutatedEqualsTen = pairType.reference_member("left").operator("equals")(registry.caster.cast("int", 10.0))
+    assert(registry.caster.retrieve("byte", mutatedEqualsTen) == 1.0)

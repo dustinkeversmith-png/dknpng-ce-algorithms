@@ -565,6 +565,13 @@ final class Value(
 
   def value(): Value = this
 
+  def insert(bytes: Array[Byte]): Value =
+    val baseValue = this.base_value()
+    val field = baseValue.index("value")
+    require(bytes.length == field.length.toInt, s"Expected ${field.length} bytes but received ${bytes.length}")
+    Array.copy(bytes, 0, baseValue.memory, field.offset.toInt, bytes.length)
+    this
+
   def operator(name: String)(arguments: Value*): Value =
     var valueArguments: Vector[Value] = Vector.empty
     var argumentIndex = 0

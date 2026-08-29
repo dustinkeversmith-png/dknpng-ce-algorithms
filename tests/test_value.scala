@@ -5,8 +5,7 @@ class TypeTests extends munit.FunSuite:
     assert(emptyRegistry.sizes.isEmpty)
     assert(emptyRegistry.operators.isEmpty)
 
-    val baseTypes = new BaseTypes()
-    val registry = baseTypes.registerAll()
+    val registry = new BaseTypes().registerAll()
 
     assert(registry.sizes("byte") == 1L)
     assert(registry.sizes("short") == 2L)
@@ -21,10 +20,10 @@ class TypeTests extends munit.FunSuite:
     value.registry = registry
     value.index_fields()
     value.allocate()
-    value.operator("=")(baseTypes.result_value("double", 6.0))
+    value.operator("=")(registry.caster.cast("double", 6.0))
 
-    val ten = value.operator("+")(baseTypes.result_value("double", 4.0))
-    assert(baseTypes.read_value(ten.operator("equals")(baseTypes.result_value("double", 10.0))) == 1.0)
+    val ten = value.operator("+")(registry.caster.cast("double", 4.0))
+    assert(registry.caster.retrieve("byte", ten.operator("equals")(registry.caster.cast("double", 10.0))) == 1.0)
 
     val leftStructure = new Value(
       "leftStructure",
@@ -34,8 +33,8 @@ class TypeTests extends munit.FunSuite:
     leftStructure.registry = registry
     leftStructure.index_fields()
     leftStructure.allocate()
-    leftStructure.reference_member("x").operator("=")(baseTypes.result_value("double", 2.5))
-    leftStructure.reference_member("count").operator("=")(baseTypes.result_value("int", 3.0))
+    leftStructure.reference_member("x").operator("=")(registry.caster.cast("double", 2.5))
+    leftStructure.reference_member("count").operator("=")(registry.caster.cast("int", 3.0))
 
     val rightStructure = new Value(
       "rightStructure",
@@ -45,13 +44,13 @@ class TypeTests extends munit.FunSuite:
     rightStructure.registry = registry
     rightStructure.index_fields()
     rightStructure.allocate()
-    rightStructure.reference_member("x").operator("=")(baseTypes.result_value("double", 1.5))
-    rightStructure.reference_member("count").operator("=")(baseTypes.result_value("int", 4.0))
+    rightStructure.reference_member("x").operator("=")(registry.caster.cast("double", 1.5))
+    rightStructure.reference_member("count").operator("=")(registry.caster.cast("int", 4.0))
 
     val combinedX = leftStructure.reference_member("x").operator("+")(rightStructure.reference_member("x"))
     val combinedCount = leftStructure.reference_member("count").operator("+")(rightStructure.reference_member("count"))
-    assert(baseTypes.read_value(combinedX.operator("equals")(baseTypes.result_value("double", 4.0))) == 1.0)
-    assert(baseTypes.read_value(combinedCount.operator("equals")(baseTypes.result_value("int", 7.0))) == 1.0)
+    assert(registry.caster.retrieve("byte", combinedX.operator("equals")(registry.caster.cast("double", 4.0))) == 1.0)
+    assert(registry.caster.retrieve("byte", combinedCount.operator("equals")(registry.caster.cast("int", 7.0))) == 1.0)
 
   test("type creation and base functional iteration type and size natures"):
     val positionType = new ValueType(
@@ -122,8 +121,7 @@ class TypeTests extends munit.FunSuite:
       Map("value" -> "int")
     )
 
-    val baseValues = new BaseTypes()
-    val valueRegistry = baseValues.registerAll()
+    val valueRegistry = new BaseTypes().registerAll()
     position.registry = valueRegistry
     this_value_type.registry = valueRegistry
     position.index_fields()
@@ -135,9 +133,9 @@ class TypeTests extends munit.FunSuite:
     // position[0] = 1;
     // position[1] = 2;
     // position[2] = 3;
-    position.reference_element(Array(0)).operator("=")(baseValues.result_value("int", 1.0))
-    position.reference_element(Array(1)).operator("=")(baseValues.result_value("int", 2.0))
-    position.reference_element(Array(2)).operator("=")(baseValues.result_value("int", 3.0))
+    position.reference_element(Array(0)).operator("=")(valueRegistry.caster.cast("int", 1.0))
+    position.reference_element(Array(1)).operator("=")(valueRegistry.caster.cast("int", 2.0))
+    position.reference_element(Array(2)).operator("=")(valueRegistry.caster.cast("int", 3.0))
 
     // Multidimensional iteration
     val iter = position.iterator();
@@ -145,16 +143,16 @@ class TypeTests extends munit.FunSuite:
     val firstPosition: Value = iter.next().value()
     val secondPosition: Value = iter.next().value()
     val thirdPosition: Value = iter.next().value()
-    assert(baseValues.read_value(firstPosition) == 1.0)
-    assert(baseValues.read_value(secondPosition) == 2.0)
-    assert(baseValues.read_value(thirdPosition) == 3.0)
+    assert(valueRegistry.caster.retrieve("int", firstPosition) == 1.0)
+    assert(valueRegistry.caster.retrieve("int", secondPosition) == 2.0)
+    assert(valueRegistry.caster.retrieve("int", thirdPosition) == 3.0)
 
     // Multidimensional and nested assignment
     // this_value_type[0,0,0,0]["id"] = 2;
     // this_value_type[0,0,0,0]["mass"] = 3.0;
     val selectedValue = this_value_type.reference_element(Array(0, 0, 0, 0))
-    selectedValue.reference_member("id").operator("=")(baseValues.result_value("long", 2.0))
-    selectedValue.reference_member("mass").operator("=")(baseValues.result_value("double", 3.0))
+    selectedValue.reference_member("id").operator("=")(valueRegistry.caster.cast("long", 2.0))
+    selectedValue.reference_member("mass").operator("=")(valueRegistry.caster.cast("double", 3.0))
     assert(selectedValue.shape.isEmpty)
     assert(selectedValue.fields.nonEmpty)
     assert(selectedValue.fields.contains("id"))
@@ -174,8 +172,8 @@ class TypeTests extends munit.FunSuite:
     // Return values like this ensures that we never have any types we just use the specified types.
     // Value mass = iter.next().value()
     val mass: Value = selectedIterator.next().value()
-    assert(baseValues.read_value(id) == 2.0)
-    assert(baseValues.read_value(mass) == 3.0)
+    assert(valueRegistry.caster.retrieve("long", id) == 2.0)
+    assert(valueRegistry.caster.retrieve("double", mass) == 3.0)
 
     assert(this_value_type.element_size == 28L)
     assert(this_value_type.total_size == 448L)

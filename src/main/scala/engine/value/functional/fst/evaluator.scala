@@ -14,8 +14,6 @@ final class Evaluator(var tree: FunctionalSemanticTree) extends Evalulator:
 
     var returned: Option[Value] = None
     var has_returned: Boolean = false
-    var baseTypes: BaseTypes = new BaseTypes()
-    baseTypes.registry = this.tree.registry
 
     def evaluate(): Option[Value] =
         this.returned = None
@@ -67,14 +65,15 @@ final class Evaluator(var tree: FunctionalSemanticTree) extends Evalulator:
             case IndexAccessNode(value, index) =>
                 // Fill in the gaps here
                 // Index access uses the current hierarchical Value view, not a flattened resolver.
-                val elementIndex = this.baseTypes.read_value(this.evaluate_node(index)).toInt
+                val indexValue = this.evaluate_node(index)
+                val elementIndex = this.tree.registry.caster.retrieve(indexValue.base_type_name(), indexValue).toInt
                 this.evaluate_node(value).reference_element(Array(elementIndex))
             case NumericLiteralNode(value) =>
                 val literalValue = new Value("literal", Vector.empty, Map("value" -> "double"))
                 literalValue.registry = this.tree.registry
                 literalValue.index_fields()
                 literalValue.allocate()
-                this.baseTypes.write_value(literalValue, value)
+                this.tree.registry.caster.insert("double", literalValue, value)
             case StringLiteralNode(_) =>
                 throw new UnsupportedOperationException("String Value registration is not available in the base type pack")
             case UnaryOperatorNode(operator, value) =>
@@ -88,11 +87,12 @@ final class Evaluator(var tree: FunctionalSemanticTree) extends Evalulator:
                 val leftValue = this.evaluate_node(left)
 
                 // These preserve short-circuit behavior while the actual operation remains a Value operator.
-                if operator == "&&" && this.baseTypes.read_value(leftValue) == 0.0 then leftValue
-                else if operator == "||" && this.baseTypes.read_value(leftValue) != 0.0 then leftValue
+                if operator == "&&" && this.tree.registry.caster.retrieve(leftValue.base_type_name(), leftValue) == 0.0 then leftValue
+                else if operator == "||" && this.tree.registry.caster.retrieve(leftValue.base_type_name(), leftValue) != 0.0 then leftValue
                 else leftValue.operator(operator)(this.evaluate_node(right))
             case TernaryOperatorNode(condition, whenTrue, whenFalse) =>
-                if this.baseTypes.read_value(this.evaluate_node(condition)) != 0.0 then this.evaluate_node(whenTrue)
+                val conditionValue = this.evaluate_node(condition)
+                if this.tree.registry.caster.retrieve(conditionValue.base_type_name(), conditionValue) != 0.0 then this.evaluate_node(whenTrue)
                 else this.evaluate_node(whenFalse)
             case AssignmentOperatorNode(target, operator, assignedValue) =>
                 val targetValue = this.evaluate_node(target)
@@ -109,7 +109,8 @@ final class Evaluator(var tree: FunctionalSemanticTree) extends Evalulator:
             case BlockNode(statements) =>
                 this.evaluate_block(BlockNode(statements))
             case IfNode(condition, thenBranch, elseBranch) =>
-                if this.baseTypes.read_value(this.evaluate_node(condition)) != 0.0 then this.evaluate_block(thenBranch)
+                val conditionValue = this.evaluate_node(condition)
+                if this.tree.registry.caster.retrieve(conditionValue.base_type_name(), conditionValue) != 0.0 then this.evaluate_block(thenBranch)
                 else
                     elseBranch match
                         case Some(branch) => this.evaluate_block(branch)
@@ -124,8 +125,10 @@ final class Evaluator(var tree: FunctionalSemanticTree) extends Evalulator:
                 evaluatedValue.registry = this.tree.registry
                 evaluatedValue.index_fields()
                 evaluatedValue.allocate()
-                while !this.has_returned && this.baseTypes.read_value(this.evaluate_node(condition)) != 0.0 do
+                var conditionValue = this.evaluate_node(condition)
+                while !this.has_returned && this.tree.registry.caster.retrieve(conditionValue.base_type_name(), conditionValue) != 0.0 do
                     evaluatedValue = this.evaluate_block(body)
+                    if !this.has_returned then conditionValue = this.evaluate_node(condition)
                 evaluatedValue
             case ReturnNode(value) =>
                 this.returned = value.map(this.evaluate_node)

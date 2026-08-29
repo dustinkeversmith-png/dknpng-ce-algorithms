@@ -8,7 +8,7 @@ import scala.collection.mutable.HashMap
 // name is name of the operation, and arguments is the argument signature
 // so that way we can find the matching Functional based on the name of the operator and types of the function signature.
 
-type OperatorFunction = (Value, Vector[Value]) => Value
+type OperatorFunction = (FunctionalId, Value, Vector[Value]) => Value
 
 
 // Functional programs still use this as their external name and argument signature.
@@ -61,7 +61,7 @@ final class ValueOperators:
       id.arguments.size == arguments.size,
       s"Operator '${id.name}' expected ${id.arguments.size} arguments but received ${arguments.size}"
     )
-    operatorFunction(arguments.head, arguments.tail)
+    operatorFunction(id, arguments.head, arguments.tail)
 
     // Find the Functional
     // Compile it into the syntactic and ast form

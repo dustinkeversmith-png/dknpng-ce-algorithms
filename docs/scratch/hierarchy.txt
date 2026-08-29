@@ -4,6 +4,11 @@
   
   P <State Space, Initial State Envelope, Domain Invariants, Goal Predicate, Objective / Cost Functional>
   
+  State Space:
+   Inputs ; { desc }
+   Objectives ;
+   Goal ; { } evaluation-function
+  
 
 
  Goal States: What are some good examples of these?

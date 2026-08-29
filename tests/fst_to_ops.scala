@@ -10,8 +10,16 @@ class FunctionalSemanticTreeOperatorTests extends munit.FunSuite:
             Vector(3),
             Map("value" -> "int")
         )
-        positionType.registry = registry
-        positionType.fields("value").registry = registry
+        val particleType = new ValueType(
+            "Particle",
+            Map("position" -> positionType)
+        )
+        particleType.attach_registry(registry)
+        assert(particleType.registry eq registry)
+        assert(particleType.fields("position").registry eq registry)
+        assert(particleType.fields("position").fields("value").registry eq registry)
+        assert(positionType.registry eq registry)
+        assert(positionType.fields("value").registry eq registry)
 
         val pairTypeA = new Value("PositionA", positionType)
         val pairTypeB = new Value("PositionB", positionType)
@@ -35,10 +43,10 @@ class FunctionalSemanticTreeOperatorTests extends munit.FunSuite:
 
         val source =
             """
-              Position add(Position a, Position b) {
-                Position result;
+              Value add(Value a, Value b) {
+                Value result;
                 for (int i = 0; i < a.length(); i += 1) {
-                  result[i] = a[i] + b[i];
+                  result[i] = a[i].operator("+", b[i]);
                 }
                 return result;
               }
@@ -53,12 +61,21 @@ class FunctionalSemanticTreeOperatorTests extends munit.FunSuite:
 
         assert(syntaxTree.statements.head.isInstanceOf[FunctionDeclaration])
         val function = syntaxTree.statements.head.asInstanceOf[FunctionDeclaration]
-        assert(function.returnType.name == "Position")
+        assert(function.returnType.name == "Value")
         assert(function.parameters == Vector(
-            Parameter(TypeName("Position"), Variable("a")),
-            Parameter(TypeName("Position"), Variable("b"))
+            Parameter(TypeName("Value"), Variable("a")),
+            Parameter(TypeName("Value"), Variable("b"))
         ))
         assert(function.body.statements(1).isInstanceOf[ForStatement])
+        val recursiveLoop = function.body.statements(1).asInstanceOf[ForStatement]
+        assert(recursiveLoop.body.statements.head == Assign(
+            Index(Variable("result"), Variable("i")),
+            "=",
+            Call(
+                Member(Index(Variable("a"), Variable("i")), "operator"),
+                Vector(StringLiteral("+"), Index(Variable("b"), Variable("i")))
+            )
+        ))
 
         // Sets registry indexes the fields and then sets the values.
         val semanticTree = new FunctionalSemanticTree()

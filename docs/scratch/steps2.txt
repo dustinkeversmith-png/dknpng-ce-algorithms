@@ -86,6 +86,35 @@ then write a program like sorting a vector, use a real argument and return out a
 
 
 # Now test building a operator from the fst and adding it to the registry, to using as an evaluation step
+	
+finish the test in fst_to_ops adding support for a new semantic program and evaluation, it is probably best to now stop storing args in the semantic tree and instead set them up in the evaluator, along side the stack
+
+1. The mission directive of using the Value type in the source program and then calling the recurisve .operator("+") on the value itself has not been covered, please review the updated fst_to_ops to see what I mean, you obviously when ahead and erased some of the writing i did
+
+        val source =
+            """
+              Value add(Value a, Value b) {
+                Value result;
+                for (int i = 0; i < a.length(); i += 1) {
+                  Value[i] = Value[i].operator("+", Value[i]);
+                }
+                return result;
+              }
+
+              return add(a, b);
+			  
+there you go pal, dont know why you skipped over the most important part here, the recursive operator calling on the registry of the object type.
+
+2. if you could go ahead and use attach registry on the type as well and then the attach registry will go and attach all of the other sub value types if you can, that would be nice, additionally having the value and value type share the registry so realistically a value could propogate its registry down the value types
+ positionType.fields("value").registry = registry
+ 
+ here is an example of an infraction of this
+ positionType.fields("value").registry = registry
+ 
+
+other than that, this is actually pretty good!
+
+
 
 # Then embedd our value system into space and test generative guided generation, and different invariant types
 

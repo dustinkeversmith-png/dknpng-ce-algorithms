@@ -19,6 +19,17 @@ class ValueType(
 
   var registry: TypeRegistry = new BaseTypes().registerAll()
 
+  def attach_registry(typeRegistry: TypeRegistry): ValueType =
+    this.registry = typeRegistry
+
+    val fieldNames = this.fields.keys.toVector
+    var fieldIndex = 0
+    while fieldIndex < fieldNames.length do
+      this.fields(fieldNames(fieldIndex)).attach_registry(typeRegistry)
+      fieldIndex += 1
+
+    this
+
   // Just kind of base line requirements here, hard coded right in. Thats fine I guess..
   require(this.name.nonEmpty, "A value type name cannot be empty")
   require(this.t.nonEmpty, "A canonical value type name cannot be empty")
@@ -224,8 +235,8 @@ final class Value(
   this.index_fields()
   this.allocate()
 
-  def attach_registry(typeRegistry: TypeRegistry): Value =
-    this.registry = typeRegistry
+  override def attach_registry(typeRegistry: TypeRegistry): Value =
+    super.attach_registry(typeRegistry)
     this.index_fields()
     this.allocate()
     this

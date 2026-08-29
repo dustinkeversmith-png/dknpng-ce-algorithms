@@ -29,8 +29,6 @@ trait Space:
 
   // This will be valueType description
 
-
-
   /** List of all semantic invariants associated with this Space eg. "Sum of row elemnts must equal 1.0"*/
   def semantic_invariants: List[Invariant]
 

@@ -95,7 +95,6 @@ final class Evaluator(var tree: FunctionalSemanticTree) extends Evalulator:
         throw new NoSuchElementException(s"No Value provides a registry for type '$typeName'")
 
     def declared_value(name: String, valueType: String): Value =
-        val registry = this.find_registry(valueType)
         var matchingValue: Option[Value] = None
         var scopeIndex = this.scopes.length - 1
 
@@ -103,26 +102,28 @@ final class Evaluator(var tree: FunctionalSemanticTree) extends Evalulator:
             val scopeValues = this.scopes(scopeIndex).valuesIterator
             while scopeValues.hasNext && matchingValue.isEmpty do
                 val value = scopeValues.next()
-                if value.t == valueType then matchingValue = Some(value)
+                if valueType == "Value" || value.t == valueType then matchingValue = Some(value)
             scopeIndex -= 1
 
         val stackValues = this.stack.valuesIterator
         while stackValues.hasNext && matchingValue.isEmpty do
             val value = stackValues.next()
-            if value.t == valueType then matchingValue = Some(value)
+            if valueType == "Value" || value.t == valueType then matchingValue = Some(value)
 
         val argumentValues = this.args.valuesIterator
         while argumentValues.hasNext && matchingValue.isEmpty do
             val value = argumentValues.next()
-            if value.t == valueType then matchingValue = Some(value)
+            if valueType == "Value" || value.t == valueType then matchingValue = Some(value)
 
         matchingValue match
             case Some(value) =>
                 val declaredValue = new Value(name, value)
-                declaredValue.attach_registry(registry)
+                declaredValue.attach_registry(value.registry)
             case None =>
+                if valueType == "Value" then
+                    throw new NoSuchElementException(s"A generic Value declaration '$name' requires a runtime Value to provide its structure")
+                val registry = this.find_registry(valueType)
                 val declaredValue = new Value(name, Vector.empty, Map("value" -> valueType))
-                declaredValue.fields("value").registry = registry
                 declaredValue.t = valueType
                 declaredValue.attach_registry(registry)
 
@@ -145,7 +146,7 @@ final class Evaluator(var tree: FunctionalSemanticTree) extends Evalulator:
             val parameter = function.parameters(parameterIndex)
             val argument = arguments(parameterIndex)
             require(
-                argument.t == parameter.valueType || argument.base_type_name() == parameter.valueType,
+                parameter.valueType == "Value" || argument.t == parameter.valueType || argument.base_type_name() == parameter.valueType,
                 s"Function '${function.name}' parameter '${parameter.name}' expected ${parameter.valueType} but received ${argument.t}"
             )
             functionScope(parameter.name) = argument
@@ -163,7 +164,7 @@ final class Evaluator(var tree: FunctionalSemanticTree) extends Evalulator:
         )
 
         require(
-            functionResult.t == function.returnType || functionResult.base_type_name() == function.returnType,
+            function.returnType == "Value" || functionResult.t == function.returnType || functionResult.base_type_name() == function.returnType,
             s"Function '${function.name}' declared ${function.returnType} but returned ${functionResult.t}"
         )
 
@@ -270,6 +271,19 @@ final class Evaluator(var tree: FunctionalSemanticTree) extends Evalulator:
                 this.returned = Some(returnedValue)
                 this.has_returned = true
                 returnedValue
+            case FunctionCallNode(MemberAccessNode(value, "operator"), arguments) =>
+                val receiver = this.evaluate_node(value)
+                require(arguments.nonEmpty, "Value.operator requires an operator name")
+                val operatorName = arguments.head match
+                    case StringLiteralNode(name) => name
+                    case _ => throw new IllegalArgumentException("Value.operator requires a string operator name as its first argument")
+
+                var evaluatedArguments: Vector[Value] = Vector.empty
+                var argumentIndex = 1
+                while argumentIndex < arguments.length do
+                    evaluatedArguments = evaluatedArguments :+ this.evaluate_node(arguments(argumentIndex), Some(receiver))
+                    argumentIndex += 1
+                receiver.operator(operatorName)(evaluatedArguments*)
             case FunctionCallNode(MemberAccessNode(value, member), arguments) =>
                 val receiver = this.evaluate_node(value)
                 var evaluatedArguments: Vector[Value] = Vector.empty

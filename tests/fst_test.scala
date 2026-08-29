@@ -15,8 +15,7 @@ class FunctionalSemanticTreeIntegrationTests extends munit.FunSuite:
             Vector(5),
             Map("value" -> "int")
         )
-        vectorType.registry = registry
-        vectorType.fields("value").registry = registry
+        vectorType.attach_registry(registry)
 
         val values = new Value("numbers", vectorType)
         values.attach_registry(registry)
@@ -114,8 +113,7 @@ class FunctionalSemanticTreeIntegrationTests extends munit.FunSuite:
         val mutableParticle = new Value("particle", Vector.empty, Map("position" -> positionType))
 
         val registry = new BaseTypes().registerAll()
-        positionType.registry = registry
-        positionType.fields("value").registry = registry
+        positionType.attach_registry(registry)
         mutableParticle.attach_registry(registry)
 
         val args = HashMap[String, Value](

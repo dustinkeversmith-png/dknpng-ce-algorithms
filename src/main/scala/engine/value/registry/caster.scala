@@ -31,6 +31,7 @@ final class Caster(var registry: TypeRegistry):
   def cast(typeName: String, number: Double): Value =
     val result = new Value("result", Vector.empty, Map("value" -> typeName))
     result.registry = this.registry
+    result.fields("value").registry = this.registry
     result.index_fields()
     result.allocate()
     this.insert(typeName, result, number)

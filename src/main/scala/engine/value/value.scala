@@ -191,6 +191,11 @@ final class Value(
 
   /// STANDARD MOTHER FUCKING CONSTRUCTOR
 
+  def this(name: String, valueType: ValueType) =
+    this(name, valueType.shape, valueType.fields)
+    this.t = valueType.t
+    this.registry = valueType.registry
+
   require(this.name.nonEmpty, "A value name cannot be empty")
   require(this.shape.forall(_ > 0), "Shape dimensions must all be positive")
 
@@ -240,8 +245,7 @@ final class Value(
       var measuredElementSize = 0L
 
       if valueType.fields.isEmpty then
-        valueType.registry = this.registry
-        measuredElementSize = this.registry.size(valueType.t)
+        measuredElementSize = valueType.registry.size(valueType.t)
       else
         val fieldNames = valueType.fields.keys.toVector
         var fieldIndex = 0
@@ -497,7 +501,7 @@ final class Value(
     val field = this.index.getOrElse(path, throw new NoSuchElementException(s"Unknown indexed path: $path"))
     val referencedValue = new Value(field.valueType.name, field.valueType.shape, field.valueType.fields)
     referencedValue.t = field.valueType.t
-    referencedValue.registry = this.registry
+    referencedValue.registry = field.valueType.registry
     referencedValue.memory = this.memory
     referencedValue.total_size = field.length
     referencedValue.element_size = field.valueType.element_size
@@ -508,7 +512,13 @@ final class Value(
       referencedValue.shape = Vector.empty
       referencedValue.index("value") = field
     else
-      if path.endsWith("]") then referencedValue.shape = Vector.empty
+      if path.endsWith("]") then
+        referencedValue.shape = Vector.empty
+        if referencedValue.fields.size == 1 then
+          val elementField = referencedValue.fields(referencedValue.fields.keys.head)
+          if elementField.shape.isEmpty && elementField.fields.isEmpty then
+            referencedValue.t = elementField.t
+            referencedValue.registry = elementField.registry
 
       val indexedPaths = this.index.keys.toVector
       var indexedPathIndex = 0

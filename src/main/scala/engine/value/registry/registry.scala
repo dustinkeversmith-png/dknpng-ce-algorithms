@@ -23,10 +23,9 @@ final class TypeRegistry:
     this.operators(name) = registeredOperators
 
   def register_operator(name: String, id: FunctionalId, operator: OperatorFunction): Unit =
-    this.operators.getOrElse(
-      name,
-      throw new NoSuchElementException(s"Register type '$name' before registering its operators")
-    ).register(id, operator)
+    if !this.operators.contains(name) then
+      this.operators(name) = new ValueOperators()
+    this.operators(name).register(id, operator)
 
   def register_cast(name: String, retrieve: Array[Byte] => Double, insert: Double => Array[Byte]): Unit =
     this.caster.register(name, retrieve, insert)
@@ -36,14 +35,18 @@ final class TypeRegistry:
   def operator(name: String, values: Array[Value]): Value =
     require(values.nonEmpty, s"Operator '$name' requires at least one Value")
 
-    val baseValue = values(0).base_value()
-    val typeName = baseValue.base_type_name()
-    var valueArguments: Vector[Value] = Vector(baseValue)
-    var argumentIndex = 1
+    var valueArguments: Vector[Value] = Vector.empty
+    var argumentIndex = 0
 
     while argumentIndex < values.length do
-      valueArguments = valueArguments :+ values(argumentIndex)
+      val value = values(argumentIndex)
+      if this.operators.contains(value.t) then
+        valueArguments = valueArguments :+ value
+      else
+        valueArguments = valueArguments :+ value.base_value()
       argumentIndex += 1
+
+    val typeName = valueArguments(0).t
 
     this.operators.getOrElse(
       typeName,

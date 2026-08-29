@@ -49,7 +49,7 @@ final class ValueOperators:
     var fid_hash = name
     var argumentIndex = 0
     while argumentIndex < arguments.length do
-      fid_hash += s"_${arguments(argumentIndex).base_type_name()}"
+      fid_hash += s"_${arguments(argumentIndex).t}"
       argumentIndex += 1
 
     val (id, operatorFunction) = this.operator_set.getOrElse(

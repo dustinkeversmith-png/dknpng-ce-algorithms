@@ -208,16 +208,24 @@ class TypeTests extends munit.FunSuite:
     )
 
     // nested particle value type declaring a add operator between the two 
-    val leftStructure = new Value(
-      "particle",
-      Vector.empty,
-      type=positionType
-    )
-    val rightStructure = new Value(
-      "particle",
-      Vector.empty,
-      type=positionType
-    )
+    val valueRegistry = new BaseTypes().registerAll()
+
+    // val leftStructure = new Value(
+    //   "particle",
+    //   Vector.empty,
+    //   type=positionType
+    // )
+    // val rightStructure = new Value(
+    //   "particle",
+    //   Vector.empty,
+    //   type=positionType
+    // )
+    val leftStructure = new Value("particle", positionType)
+    val rightStructure = new Value("particle", positionType)
+
+    rightStructure.registry = valueRegistry
+    leftStructure.registry = valueRegistry
+
 
     leftStructure.index_fields()
     leftStructure.allocate()
@@ -225,33 +233,65 @@ class TypeTests extends munit.FunSuite:
     rightStructure.index_fields()
     rightStructure.allocate()
 
+    leftStructure.reference_element(Array(0)).operator("=")(valueRegistry.caster.cast("int", 1.0))
+    leftStructure.reference_element(Array(1)).operator("=")(valueRegistry.caster.cast("int", 2.0))
+    leftStructure.reference_element(Array(2)).operator("=")(valueRegistry.caster.cast("int", 3.0))
 
-    val valueRegistry = new BaseTypes().registerAll()
-    rightStructure.registry = valueRegistry
-    leftStructure.registry = valueRegistry
+    rightStructure.reference_element(Array(0)).operator("=")(valueRegistry.caster.cast("int", 4.0))
+    rightStructure.reference_element(Array(1)).operator("=")(valueRegistry.caster.cast("int", 5.0))
+    rightStructure.reference_element(Array(2)).operator("=")(valueRegistry.caster.cast("int", 6.0))
 
     val assignOperator: OperatorFunction = (id, a, arguments) =>
-      val right = valueRegistry.caster.retrieve(id.arguments("b"), arguments(0))
-      valueRegistry.caster.insert(id.arguments("a"), a, right)
+      // val right = valueRegistry.caster.retrieve(id.arguments("b"), arguments(0))
+      // valueRegistry.caster.insert(id.arguments("a"), a, right)
+      val right = arguments(0)
+      a.reference_element(Array(0)).operator("=")(right.reference_element(Array(0)))
+      a.reference_element(Array(1)).operator("=")(right.reference_element(Array(1)))
+      a.reference_element(Array(2)).operator("=")(right.reference_element(Array(2)))
+      a
 
     val addOperator: OperatorFunction = (id, x, arguments) =>
-      Value l = arguments(0)
-      Value r = arguments(1)
+      // Value l = arguments(0)
+      // Value r = arguments(1)
 
-      Value return = "of position type"
+      // Value return = "of position type"
       
-      val left = valueRegistry.caster.retrieve(id.arguments("a"), arguments(0))
-      val right = valueRegistry.caster.retrieve(id.arguments("b"), arguments(1))
+      // val left = valueRegistry.caster.retrieve(id.arguments("a"), arguments(0))
+      // val right = valueRegistry.caster.retrieve(id.arguments("b"), arguments(1))
+      val left = x
+      val right = arguments(0)
+      val result = new Value("position_result", positionType)
+      result.registry = x.registry
+      result.index_fields()
+      result.allocate()
 
 
 
       // For each of our values since this function is keenly aware that position has 3 things inside of it.
-      value.operator("+")(l.reference_element(Array(0)), r.reference_element(Array(0)))
+      // value.operator("+")(l.reference_element(Array(0)), r.reference_element(Array(0)))
+      val added0 = left.reference_element(Array(0)).operator("+")(right.reference_element(Array(0)))
+      val added1 = left.reference_element(Array(1)).operator("+")(right.reference_element(Array(1)))
+      val added2 = left.reference_element(Array(2)).operator("+")(right.reference_element(Array(2)))
+      result.reference_element(Array(0)).operator("=")(added0)
+      result.reference_element(Array(1)).operator("=")(added1)
+      result.reference_element(Array(2)).operator("=")(added2)
       ///
-
+      result
 
     val argumentTypes = Map("a" -> "Position", "b" -> "Position")
     valueRegistry.register_operator("Position", FunctionalId("=", argumentTypes), assignOperator)
+    valueRegistry.register_operator("Position", FunctionalId("+", argumentTypes), addOperator)
+
+    val result = leftStructure.operator("+")(rightStructure)
+    assert(result.t == "Position")
+    assert(valueRegistry.caster.retrieve("int", result.reference_element(Array(0))) == 5.0)
+    assert(valueRegistry.caster.retrieve("int", result.reference_element(Array(1))) == 7.0)
+    assert(valueRegistry.caster.retrieve("int", result.reference_element(Array(2))) == 9.0)
+
+    leftStructure.operator("=")(rightStructure)
+    assert(valueRegistry.caster.retrieve("int", leftStructure.reference_element(Array(0))) == 4.0)
+    assert(valueRegistry.caster.retrieve("int", leftStructure.reference_element(Array(1))) == 5.0)
+    assert(valueRegistry.caster.retrieve("int", leftStructure.reference_element(Array(2))) == 6.0)
 
 
   

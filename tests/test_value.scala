@@ -226,7 +226,7 @@ class TypeTests extends munit.FunSuite:
     rightStructure.registry = valueRegistry
     leftStructure.registry = valueRegistry
 
-
+    
     leftStructure.index_fields()
     leftStructure.allocate()
 

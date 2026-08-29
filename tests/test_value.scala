@@ -199,3 +199,67 @@ class TypeTests extends munit.FunSuite:
     assert(positionAndMass.head.offset == 8L)
     assert(positionAndMass.last.offset == 436L)
 
+  test("nested_structure_operator_resolution"):
+
+    val positionType = new ValueType(
+      "Position",
+      Vector(3),
+      Map("value" -> "int")
+    )
+
+    // nested particle value type declaring a add operator between the two 
+    val leftStructure = new Value(
+      "particle",
+      Vector.empty,
+      type=positionType
+    )
+    val rightStructure = new Value(
+      "particle",
+      Vector.empty,
+      type=positionType
+    )
+
+    leftStructure.index_fields()
+    leftStructure.allocate()
+
+    rightStructure.index_fields()
+    rightStructure.allocate()
+
+
+    val valueRegistry = new BaseTypes().registerAll()
+    rightStructure.registry = valueRegistry
+    leftStructure.registry = valueRegistry
+
+    val assignOperator: OperatorFunction = (id, a, arguments) =>
+      val right = valueRegistry.caster.retrieve(id.arguments("b"), arguments(0))
+      valueRegistry.caster.insert(id.arguments("a"), a, right)
+
+    val addOperator: OperatorFunction = (id, x, arguments) =>
+      Value l = arguments(0)
+      Value r = arguments(1)
+
+      Value return = "of position type"
+      
+      val left = valueRegistry.caster.retrieve(id.arguments("a"), arguments(0))
+      val right = valueRegistry.caster.retrieve(id.arguments("b"), arguments(1))
+
+
+
+      // For each of our values since this function is keenly aware that position has 3 things inside of it.
+      value.operator("+")(l.reference_element(Array(0)), r.reference_element(Array(0)))
+      ///
+
+
+    val argumentTypes = Map("a" -> "Position", "b" -> "Position")
+    valueRegistry.register_operator("Position", FunctionalId("=", argumentTypes), assignOperator)
+
+
+  
+
+    // Then register a new operator on our position types
+
+    
+
+
+
+

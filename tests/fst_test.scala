@@ -6,6 +6,10 @@
 import scala.collection.mutable.HashMap
 
 class FunctionalSemanticTreeIntegrationTests extends munit.FunSuite:
+
+    test("build simple c like domain registry with arrays, vectors, .length, and all that then build a test program over the domain"):
+        
+
     test("parse, build the finalized nodal tree, and evaluate mutable Value arguments"):
         val source =
             """

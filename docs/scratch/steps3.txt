@@ -1,0 +1,92 @@
+I like the idea of combinatorially being able to add different objective functions, facts, or learned things to some kind of context to aid in assembling a strategy
+
+I feel like the strategies will be similar to maybe a suggestion when creating the fully underlying operator tree
+
+So our solution will be like a program tree or exectuable series of instruction nodes or a pipeline of sorts so a strategy may be like the higher level node possibly informing inputs or outputs to the next stage in the pipeline
+
+So like for example I want to combinatorially assign like strategy suggestions or try different strategies or constructed strategies from a pool say spacial partitioning strategies, or other types of hints or suggestions, adding different cost functions, constraint functions, kind of like a high level auditor, goes in sees the result, tries to change like a high level strategy
+
+Tier 1: Strategic Planner / Auditor (Meta-Level)            │
+│  - Selects pipeline decomposition & algorithmic scaffolds   │
+│  - Injects intermediate constraints & localized cost goals
+? yeah like maybe solving a sub problem, finding something out or something
+
+searches over Program Skeletons and Context Modifiers
+Strategy Primitives (Skeletons): High-level archetypes (e.g., DivideAndConquer(spatialPartition), AccumulationLoop(reducer), PipelineMap(transform))
+
+Context Invariants ($\mathcal{I}_{\text{stage}}$): Pre- and post-conditions injected into specific pipeline boundaries (e.g., "After stage 1, array elements must be partitioned by spatial octant")
+
+Local Cost Injector ($\mathcal{J}_{\text{stage}}$): Soft objectives scored per stage (e.g., minimizing memory footprint or temporary variable allocations).
+
+Then I want to low level combinatorially assignment of like statements/operations mutating the program graph, or implementing the stategies, cost function layers, possibly measuring the effectiveness per statements, evaluating the outputs or traces at a step, it would be useful to measure like some kind of expected value at each step to aid in the construction
+
+Tier 2: Constructive Operator Synthesizer (AST-Level)      │
+│  - Fills AST slots (Statements, Loops, Inverted Assignments)│
+│  - Traces state execution & calculates step residuals
+
+
+Functional Semantic Tree (Execution / Value Space)         │
+│  - Stack Frames, Type Registry, Memory Mutation Traces
+
+What do you think of this?
+Hierarchical Meta-Search over Denotational Program Graphs (resembling a Meta-Synthesizer combined with Hierarchical Reinforcement Learning / Monte Carlo Tree Search)
+
+
+
+
+Problem Space
+ 
+
+
+
+Represent individual invariants as compiled AST predicates ($P_1, P_2$)
+Compose them algebraically (e.g., via logical conjunction && or sequential validation chains) into a unified invariant node before building the evaluation tree.
+
+
+Derive the generator grammar directly from the structural schema of the ValueType (e.g., field types, shapes, tails, and offsets).
+
+synthesis via constraint inversion (correct-by-construction generation)
+
+instead of generating random values and filtering with predicates (rejection sampling), you symbolically invert the invariant ASTs to synthesize a generator AST that directly emits valid
+
+show example between the sampling and rejection and the inversion techniques
+
+Why Inverting the AST is NecessaryConstructive Target: Invariants are validation functions ($\mathcal{I}: \text{Value} \to \text{Boolean}$). Generators are synthesis functions ($\mathcal{G}: \text{Seed}/\text{Param} \to \text{Value}$).  The Inversion Step: You cannot just run an invariant FST to get data; you must transform the invariant AST into generator assignments before compiling it into the execution tree.  
+
+Problem Space:
+ Input/Output Specifciations
+ 
+ 
+ Goal Predicate ($\mathcal{G}_{\text{meta}}$)
+ The candidate program must satisfy semantic correctness across all evaluation test cases.
+ 
+ s_t == target (Final solution predicate)
+ 
+ Cost Function
+
+ Structural complexity penalty (AST size ... )
+ or other cost functions
+ 
+ 
+Solution Stategy
+
+ Objective Functions
+ Strategy Suggestions?
+ 
+
+Solution:
+State // Solution State
+ The program graph or AST topology (composed of sequence nodes, loop blocks, assignments, conditional branches
+ 
+Action // Mutations
+ Combinatorial rewrite rules (e.g., adding an AST node, wrapping a block in a loop, mutating an operator).
+ 
+
+ 
+Domain Invariants
+ Loop Invariants
+
+Termination Constraints
+ Loop conditions must strictly decrease a ranking/variant
+ 
+

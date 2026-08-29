@@ -47,47 +47,135 @@ trait Space:
 
   /** Checks if `s` satisfies all space invariants */
   def contains(s: Value): Boolean =
-
-
     // Same type structural layout check.
     // structural and semantic values associated with each sub type or field would also make alot more sense
     invariants.forall(_.holds(s))
 
-  /** Validates a value and reports every violated invariant. */
-  def validate(s: Value): Either[List[String], Value] =
-    val errors = invariants.filterNot(_.holds(s)).map(inv => s"[${inv.name}]: ${inv.violationMessage(s)}")
-    if errors.isEmpty then Right(s) else Left(errors)
+  /** Set Intersection: S₁ ∩ S₂ */
+  def intersect(that: Space): Space =
+    require(this.value_type.name == that.value_type.name, "Cannot intersect incompatible ValueTypes")
+    val self = this
+    new Space:
+      def description = s"(${self.description} ∩ ${that.description})"
+      def value_type = self.value_type
+      def structural_invariants = (self.structural_invariants ++ that.structural_invariants).distinct
+      def semantic_invariants = (self.semantic_invariants ++ that.semantic_invariants).distinct
 
-  // No validation or anything like that, no errors involved.
+      def generate(): Value =
+        val candidate = self.generate()
+        if that.contains(candidate) then candidate
+        else self.enumerate.find(that.contains).getOrElse(
+          throw new IllegalStateException("Intersection produced an empty or unsynthesizable space")
+        )
 
-  // --- Topology & Local Search (New) ---
-  /** Local neighborhood perturbation generator */
-  /** Some kind of topology, possibly simply just a inverse vector similarity on the memory layout for starters as a default */
-  /** Or having some kind of way of navigating the space obviously ints is just +1 % max or something*/
-  def neighbors(s: Value): LazyList[Value] = LazyList.empty
-  // Need a intelligent way to topologically traverse the space with our invariants, we can now solidly iterate through any type type, but know we need incrementers, or known dimensionality in the value, also the invariants/constraints will most likely factor into this calcualtion
+      override def enumerate: LazyList[Value] = self.enumerate.filter(that.contains)
 
-  /** Distance metric between two states in this space */
-  def distance(a: Value, b: Value): Double = 0.0
+  /** Set Union: S₁ ∪ S₂ */
+  def union(that: Space): Space =
+    require(this.value_type.name == that.value_type.name, "Cannot unite incompatible ValueTypes")
+    val self = this
+    new Space:
+      def description = s"(${self.description} ∪ ${that.description})"
+      def value_type = self.value_type
+      // Union invariants: Structural requirements must hold for either branch
+      def structural_invariants = self.structural_invariants.filter(that.structural_invariants.contains)
+      def semantic_invariants = List(
+        Invariant(
+          s"(${self.description} || ${that.description})",
+          Predicate("union_disjunction", (v: Value) => self.contains(v) || that.contains(v)),
+          v => s"Value violated both spaces in union"
+        )
+      )
 
-  /** Project / clamp an out-of-bounds state back into the valid envelope */
-  def project(s: Value): Value = s
+      override def contains(s: Value): Boolean = self.contains(s) || that.contains(s)
 
-  /** Refine this space by attaching an additional invariant */
-  def withInvariant(inv: Invariant): Space =
+      def generate(): Value =
+        if scala.util.Random.nextBoolean() then self.generate() else that.generate()
+
+      override def enumerate: LazyList[Value] =
+        self.enumerate.zipAll(that.enumerate, null, null).flatMap {
+          case (a, b) => List(Option(a), Option(b)).flatten
+        }.distinctBy(_.memory_offset)
+
+  /** Set Difference: S₁ \ S₂ */
+  def diff(that: Space): Space =
+    require(this.value_type.name == that.value_type.name, "Cannot subtract incompatible ValueTypes")
+    val self = this
+    new Space:
+      def description = s"(${self.description} \\ ${that.description})"
+      def value_type = self.value_type
+      def structural_invariants = self.structural_invariants
+      def semantic_invariants = self.semantic_invariants :+ Invariant(
+        s"NOT(${that.description})",
+        Predicate("not_contained", (v: Value) => !that.contains(v)),
+        v => s"Value fell inside excluded subspace ${that.description}"
+      )
+
+      def generate(): Value =
+        self.enumerate.find(v => !that.contains(v)).getOrElse(
+          throw new IllegalStateException("Difference resulted in an empty space")
+        )
+
+      override def enumerate: LazyList[Value] = self.enumerate.filterNot(that.contains)
+
+  // =========================================================================
+  // Topology, Neighborhoods, and Metrics
+  // =========================================================================
+
+  /** Metric d(a, b) over memory buffer elements */
+  def distance(a: Value, b: Value): Double =
+    if a.shape.nonEmpty then
+      (0 until a.shape.product).map { idx =>
+        val va = a.registry.caster.retrieve("double", a.reference_element(Array(idx)))
+        val vb = b.registry.caster.retrieve("double", b.reference_element(Array(idx)))
+        math.pow(va - vb, 2)
+      }.sum
+    else
+      math.abs(
+        a.registry.caster.retrieve("double", a) - b.registry.caster.retrieve("double", b)
+      )
+
+  /** Generates topological discrete/continuous neighbors within distance epsilon */
+  def neighbors(s: Value, step: Double = 1.0): LazyList[Value] =
+    if !contains(s) then LazyList.empty
+    else
+      val perturbations = LazyList(step, -step)
+      perturbations.flatMap { delta =>
+        val neighbor = new Value(s"${s.name}_neighbor", s.value_type)
+        neighbor.attach_registry(s.registry)
+        // Perturb primitive values or tensor dimensions
+        if s.shape.nonEmpty then
+          (0 until s.shape.product).to(LazyList).map { idx =>
+            val clone = new Value(s"${s.name}_n$idx", s.value_type)
+            clone.attach_registry(s.registry)
+            val curr = s.registry.caster.retrieve("double", s.reference_element(Array(idx)))
+            clone.reference_element(Array(idx)).operator("=")(s.registry.caster.cast("double", curr + delta))
+            project(clone)
+          }
+        else
+          val curr = s.registry.caster.retrieve("double", s)
+          neighbor.operator("=")(s.registry.caster.cast("double", curr + delta))
+          LazyList(project(neighbor))
+      }.filter(contains)
+
+  // =========================================================================
+  // Projections
+  // =========================================================================
+
+  /** Clamps or projects an arbitrary state back into the invariant-satisfying envelope */
+  def project(s: Value): Value =
+    if contains(s) then s
+    else
+      // Nearest valid neighbor projection via enumeration/distance minimizing
+      enumerate.minByOption(cand => distance(s, cand)).getOrElse(s)
+
+  /** Subspace projection onto specific member paths or sub-dimensions */
+  def projectSubspace(targetType: ValueType, extractor: Value => Value): Space =
     val parent = this
     new Space:
-      def description = parent.description
-      def value_type = parent.value_type
-      def semantic_invariants = parent.semantic_invariants :+ inv
-      def structural_invariants = parent.structural_invariants
-      def generate() =
-        val candidate = parent.generate()
-        if contains(candidate) then candidate
-        else enumerate.headOption.getOrElse(throw new IllegalStateException(s"Generator could not satisfy refinement '${inv.name}'"))
-      override def enumerate = parent.enumerate.filter(contains)
-      override def neighbors(s: Value) = parent.neighbors(s).filter(contains)
-      override def distance(a: Value, b: Value) = parent.distance(a, b)
-      override def project(s: Value) =
-        val candidate = parent.project(s)
-        if contains(candidate) then candidate else enumerate.headOption.getOrElse(candidate)
+      def description = s"Proj_${targetType.name}(${parent.description})"
+      def value_type = targetType
+      def structural_invariants = Nil
+      def semantic_invariants = Nil
+      def generate() = extractor(parent.generate())
+      override def enumerate = parent.enumerate.map(extractor)

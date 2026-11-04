@@ -1,22 +1,14 @@
 {
   "permissions": {
     "allow": [
-      "Bash(cmake:*)",
-      "Bash(ctest:*)",
-      "Bash(ninja:*)",
-      "Bash(git:*)",
-      "Bash(./build/*)",
-      "Bash(build/*)",
-      "Bash(z3:*)",
-      "Bash(python3:*)",
-      "Bash(mkdir:*)",
-      "Bash(ls:*)",
-      "Bash(cat:*)",
-      "Bash(grep:*)",
-      "Bash(sed:*)",
-      "Bash(head:*)",
-      "Bash(tail:*)",
-      "Bash(apt-get install:*)"
+      "Bash",
+      "Read",
+      "Edit",
+      "Write",
+      "Glob",
+      "Grep",
+      "WebFetch",
+      "WebSearch"
     ]
   }
 }

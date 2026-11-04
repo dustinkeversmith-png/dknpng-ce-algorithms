@@ -20,6 +20,20 @@ double ValueEnv::value(std::string_view path) const {
     return value::load_as_double(v_.memory()->data() + fi.offset, t.prim());
 }
 
+double OffsetEnv::value(std::string_view path) const {
+    auto it = cache_.find(path);
+    if (it == cache_.end()) {
+        value::FieldIndex fi = value::locate(type_, path);
+        const value::ValueType& t = *fi.value_type;
+        if (!t.is_primitive() || !t.is_scalar() || !value::prim_is_numeric(t.prim()))
+            throw std::invalid_argument("constraint variable '" + std::string(path) + "' is not a numeric scalar leaf (" +
+                                        t.signature() + ")");
+        it = cache_.emplace(std::string(path), Slot{fi.offset, t.prim()}).first;
+    }
+    if (!base_) throw std::logic_error("OffsetEnv: no buffer bound");
+    return value::load_as_double(base_ + it->second.offset, it->second.prim);
+}
+
 // ----------------------------------------------------------------- Expr ---
 
 struct Expr::Node {

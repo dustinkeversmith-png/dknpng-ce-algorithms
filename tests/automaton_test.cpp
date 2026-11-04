@@ -260,6 +260,47 @@ TEST_F(AutomatonTest, ObservationalEquivalenceAgreesWithPlainSearch) {
     EXPECT_GT(oe.stats().states_per_second(), 0);
 }
 
+TEST_F(AutomatonTest, DedupeIsSoundOnPlantedPrograms) {
+    // Plant a random hidden program, derive goals from its outputs, and check
+    // that OE search (which discards states by compact key) finds a program no
+    // longer than the planted one and agrees with plain enumeration on length.
+    std::mt19937_64 rng(77);
+    ProgramSearchOptions o{.immediates = {1, 3}, .registers = 3, .max_length = 3};
+    ProgramSynthesizer probe(m, {example(m, {0}, reg_equals(0, 0))}, o);
+    const auto& alphabet = probe.alphabet();
+    for (int trial = 0; trial < 25; ++trial) {
+        Program hidden;
+        const std::size_t len = 1 + rng() % 3;
+        for (std::size_t k = 0; k < len; ++k) hidden.push_back(alphabet[rng() % alphabet.size()]);
+        std::vector<Example> ex;
+        for (std::int64_t x : {2, -3, 5}) {
+            Value s = m.initial_state();
+            m.set_reg(s, 0, x);
+            m.set_reg(s, 1, x * 7 - 1);
+            Value out = s.clone();
+            m.run(out, hidden, hidden.size() + 1);
+            ex.push_back(example(m, {x, x * 7 - 1},
+                                 Invariant(reg_equals(2, m.reg(out, 2)) && reg_equals(1, m.reg(out, 1)))));
+        }
+        ProgramSearchOptions oe = o;
+        oe.max_length = hidden.size();
+        ProgramSynthesizer a(m, ex, oe);
+        auto pa = a.synthesize();
+        ASSERT_TRUE(pa) << "trial " << trial << ": " << to_string(hidden);
+        EXPECT_LE(pa->size(), hidden.size()) << to_string(hidden);
+        EXPECT_TRUE(a.verify(*pa));
+        if (hidden.size() <= 2) {  // plain enumeration is the exhaustive reference
+            ProgramSearchOptions plain = oe;
+            plain.observational_equivalence = false;
+            ProgramSynthesizer b(m, ex, plain);
+            auto pb = b.synthesize();
+            ASSERT_TRUE(pb) << "trial " << trial << ": " << to_string(hidden);
+            EXPECT_EQ(pa->size(), pb->size()) << to_string(hidden) << " | oe: " << to_string(*pa)
+                                              << " | plain: " << to_string(*pb);
+        }
+    }
+}
+
 TEST_F(AutomatonTest, ImpossibleTasksExhaustCleanly) {
     // r1 = r0 * r0 * r0 * r0 * r0 + 7 is not reachable in one instruction.
     std::vector<Example> ex;

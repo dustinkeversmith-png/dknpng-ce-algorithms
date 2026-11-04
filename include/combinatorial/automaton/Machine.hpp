@@ -94,6 +94,9 @@ public:
     /// Executes one instruction in place (does not consult or advance through a
     /// program; pc is updated as the instruction dictates).
     void execute(const value::Value& state, const Instruction& ins) const;
+    /// Same as execute() on the raw bytes of a state (no layout check). The
+    /// caller guarantees `state` points at state_type()->byte_size() bytes.
+    void execute_raw(std::byte* state, const Instruction& ins) const;
     /// Fetches program[pc] and executes it; halts with EndOfProgram past the end.
     void step(const value::Value& state, const Program& program) const;
     RunResult run(const value::Value& state, const Program& program, std::uint64_t max_steps = 1'000'000) const;

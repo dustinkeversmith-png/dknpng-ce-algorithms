@@ -29,8 +29,12 @@ bool is_control(Op op) {
 }  // namespace
 
 ProgramSynthesizer::ProgramSynthesizer(const Machine& machine, std::vector<Example> examples, ProgramSearchOptions options)
-    : machine_(machine), examples_(std::move(examples)), options_(std::move(options)) {
+    : machine_(machine),
+      examples_(std::move(examples)),
+      options_(std::move(options)),
+      goal_env_(machine.state_type()) {
     if (examples_.empty()) throw std::invalid_argument("ProgramSynthesizer: no examples");
+    for (const auto& e : examples_) goal_constraints_.push_back(e.goal.constraint());
     for (const auto& e : examples_)
         if (!e.input.type()->layout_equals(*machine_.state_type()))
             throw std::invalid_argument("ProgramSynthesizer: example input is not a machine state");
@@ -77,8 +81,14 @@ ProgramSynthesizer::ProgramSynthesizer(const Machine& machine, std::vector<Examp
 }
 
 bool ProgramSynthesizer::goals_hold(const std::vector<value::Value>& states) const {
-    for (std::size_t i = 0; i < examples_.size(); ++i)
-        if (!examples_[i].goal.holds(states[i])) return false;
+    for (std::size_t i = 0; i < examples_.size(); ++i) {
+        if (goal_constraints_[i]) {
+            goal_env_.rebind(states[i].data());
+            if (!goal_constraints_[i]->eval(goal_env_)) return false;
+        } else if (!examples_[i].goal.holds(states[i])) {
+            return false;
+        }
+    }
     return true;
 }
 
@@ -99,73 +109,187 @@ std::optional<Program> ProgramSynthesizer::synthesize() {
     return r;
 }
 
+namespace {
+
+/// Word-at-a-time hash for fixed-length binary keys.
+std::uint64_t hash_key(const char* p, std::size_t n) noexcept {
+    std::uint64_t h = 0x9e3779b97f4a7c15ULL ^ n;
+    std::size_t i = 0;
+    for (; i + 8 <= n; i += 8) {
+        std::uint64_t w;
+        std::memcpy(&w, p + i, 8);
+        h = (h ^ w) * 0xff51afd7ed558ccdULL;
+        h ^= h >> 32;
+    }
+    std::uint64_t tail = 0;
+    std::memcpy(&tail, p + i, n - i);
+    h = (h ^ tail) * 0xc4ceb9fe1a85ec53ULL;
+    return h ^ (h >> 29);
+}
+
+/// Set of fixed-length byte keys: keys live contiguously in one array, an
+/// open-addressing (linear probe) table holds key indices, and each key's
+/// hash is cached so probes rarely touch key bytes and growth never rehashes.
+class FixedKeySet {
+public:
+    explicit FixedKeySet(std::size_t key_len) : k_(key_len), table_(1024, kEmpty) {}
+
+    /// Inserts the key; returns false if it was already present.
+    bool insert(const char* key) {
+        if ((count_ + 1) * 2 > table_.size()) grow();
+        const std::uint64_t h = hash_key(key, k_);
+        const std::size_t mask = table_.size() - 1;
+        for (std::size_t p = h & mask;; p = (p + 1) & mask) {
+            const std::uint32_t slot = table_[p];
+            if (slot == kEmpty) {
+                table_[p] = static_cast<std::uint32_t>(count_);
+                hashes_.push_back(h);
+                keys_.insert(keys_.end(), key, key + k_);
+                ++count_;
+                return true;
+            }
+            if (hashes_[slot] == h && std::memcmp(keys_.data() + slot * k_, key, k_) == 0) return false;
+        }
+    }
+    std::size_t size() const noexcept { return count_; }
+
+private:
+    static constexpr std::uint32_t kEmpty = 0xffffffffu;
+    void grow() {
+        std::vector<std::uint32_t> t(table_.size() * 2, kEmpty);
+        const std::size_t mask = t.size() - 1;
+        for (std::size_t i = 0; i < count_; ++i) {
+            std::size_t p = hashes_[i] & mask;
+            while (t[p] != kEmpty) p = (p + 1) & mask;
+            t[p] = static_cast<std::uint32_t>(i);
+        }
+        table_.swap(t);
+    }
+    std::size_t k_;
+    std::size_t count_ = 0;
+    std::vector<std::uint32_t> table_;
+    std::vector<std::uint64_t> hashes_;
+    std::vector<char> keys_;
+};
+
+}  // namespace
+
 std::optional<Program> ProgramSynthesizer::search_oe() {
     using Memory = value::Value::Memory;
     const std::size_t n = examples_.size();
     const std::size_t S = machine_.state_type()->byte_size();
+    const std::size_t T = n * S;  // bytes per search node: one state per example
     const Machine::Layout L = machine_.layout();
     bool memory_ops = false;
     for (Op op : options_.ops) memory_ops |= uses_memory(op);
-    // Bytes that distinguish behaviour: sp/flags/halted/regs (+ memory when touched). pc is the depth.
-    const std::size_t key_begin = L.sp;
-    const std::size_t key_end = memory_ops ? S : L.regs + 8 * kRegisters;
+    // Bytes that can distinguish two nodes. Without memory ops the alphabet
+    // only writes flags and r0..r(R-1); everything else (other registers, sp,
+    // halt byte of surviving nodes, memory) is constant per example, and pc is
+    // the depth. With memory ops, everything from sp onward may change.
+    const std::size_t R = options_.registers;
+    struct Span {
+        std::size_t offset, len;
+    };
+    std::vector<Span> spans;
+    if (memory_ops) {
+        spans.push_back({L.sp, S - L.sp});
+    } else {
+        spans.push_back({L.flags, 1});
+        spans.push_back({L.regs, 8 * R});
+    }
+    std::size_t key_len = 0;
+    for (const Span& s : spans) key_len += s.len;
 
     struct Node {
         std::size_t parent;
         Instruction ins;
     };
     std::vector<Node> nodes{{SIZE_MAX, {}}};
-    auto make_key = [&](const Memory& m) {
-        std::string k;
-        k.reserve(n * (key_end - key_begin));
-        for (std::size_t i = 0; i < n; ++i)
-            k.append(reinterpret_cast<const char*>(m.data() + i * S + key_begin), key_end - key_begin);
-        return k;
-    };
-    auto views = [&](const std::shared_ptr<Memory>& m) {
-        std::vector<value::Value> vs;
-        vs.reserve(n);
-        for (std::size_t i = 0; i < n; ++i) vs.emplace_back(machine_.state_type(), m, i * S);
-        return vs;
-    };
     auto program_of = [&](std::size_t idx) {
         Program p;
         for (; nodes[idx].parent != SIZE_MAX; idx = nodes[idx].parent) p.push_back(nodes[idx].ins);
         return Program(p.rbegin(), p.rend());
     };
 
-    auto root = std::make_shared<Memory>(n * S);
-    for (std::size_t i = 0; i < n; ++i) std::memcpy(root->data() + i * S, examples_[i].input.data(), S);
-    if (goals_hold(views(root))) return Program{};
+    // One scratch buffer with persistent per-example views: every candidate is
+    // executed here, so no allocation happens per candidate.
+    auto scratch = std::make_shared<Memory>(T);
+    std::vector<value::Value> views;
+    views.reserve(n);
+    for (std::size_t i = 0; i < n; ++i) views.emplace_back(machine_.state_type(), scratch, i * S);
+    std::byte* const work = scratch->data();
 
-    std::unordered_set<std::string> seen{make_key(*root)};
-    std::vector<std::pair<std::size_t, std::shared_ptr<Memory>>> frontier{{0, root}}, next;
-    for (std::size_t depth = 1; depth <= options_.max_length && !frontier.empty(); ++depth) {
+    std::string key(n * key_len, '\0');
+    auto make_key = [&] {
+        char* out = key.data();
+        for (std::size_t i = 0; i < n; ++i)
+            for (const Span& s : spans) {
+                std::memcpy(out, work + i * S + s.offset, s.len);
+                out += s.len;
+            }
+    };
+
+    // Only the state prefix [0, M) can change: pc, sp, flags, halted and the
+    // writable registers (the whole state when memory ops are enabled). The
+    // scratch buffer keeps each example's constant tail from its input, and
+    // frontier nodes store just the n mutable prefixes.
+    const std::size_t M = memory_ops ? S : L.regs + 8 * R;
+    if (L.pc != 0 || L.sp >= M || L.flags >= M || L.halted >= M)
+        throw std::logic_error("ProgramSynthesizer: unexpected state layout");
+    const std::size_t NI = n * M;
+    auto load = [&](const std::byte* img) {
+        for (std::size_t i = 0; i < n; ++i) std::memcpy(work + i * S, img + i * M, M);
+    };
+    auto store = [&](std::vector<std::byte>& arena_out) {
+        const std::size_t at = arena_out.size();
+        arena_out.resize(at + NI);
+        for (std::size_t i = 0; i < n; ++i) std::memcpy(arena_out.data() + at + i * M, work + i * S, M);
+    };
+
+    for (std::size_t i = 0; i < n; ++i) std::memcpy(work + i * S, examples_[i].input.data(), S);
+    std::vector<std::byte> frontier, next;
+    std::vector<std::size_t> frontier_ids{0}, next_ids;
+    store(frontier);
+    if (goals_hold(views)) return Program{};
+
+    FixedKeySet seen(key.size());
+    make_key();
+    seen.insert(key.data());
+
+    for (std::size_t depth = 1; depth <= options_.max_length && !frontier_ids.empty(); ++depth) {
         stats_.depth = depth;
         next.clear();
-        for (auto& [idx, mem] : frontier) {
+        next_ids.clear();
+        const bool expand = depth < options_.max_length;
+        for (std::size_t k = 0; k < frontier_ids.size(); ++k) {
+            const std::byte* parent = frontier.data() + k * NI;
             for (const Instruction& ins : alphabet_) {
                 if (stats_.states >= options_.max_states) {
                     stats_.budget_exhausted = true;
                     return std::nullopt;
                 }
                 ++stats_.states;
-                auto child = std::make_shared<Memory>(*mem);
-                auto vs = views(child);
+                load(parent);
                 bool faulted = false;
-                for (auto& v : vs) {
-                    machine_.execute(v, ins);
-                    faulted |= machine_.halted(v) != HaltReason::Running;
+                for (std::size_t i = 0; i < n; ++i) {
+                    std::byte* st = work + i * S;
+                    machine_.execute_raw(st, ins);
+                    faulted |= std::to_integer<std::uint8_t>(st[L.halted]) != 0;
                 }
                 if (faulted) continue;
-                if (!seen.insert(make_key(*child)).second) continue;
+                make_key();
+                if (!seen.insert(key.data())) continue;
                 ++stats_.distinct;
-                nodes.push_back({idx, ins});
-                if (goals_hold(vs)) return program_of(nodes.size() - 1);
-                if (depth < options_.max_length) next.emplace_back(nodes.size() - 1, std::move(child));
+                nodes.push_back({frontier_ids[k], ins});
+                if (goals_hold(views)) return program_of(nodes.size() - 1);
+                if (expand) {
+                    store(next);
+                    next_ids.push_back(nodes.size() - 1);
+                }
             }
         }
         frontier.swap(next);
+        frontier_ids.swap(next_ids);
     }
     return std::nullopt;
 }

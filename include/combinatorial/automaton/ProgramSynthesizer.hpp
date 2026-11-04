@@ -67,6 +67,9 @@ private:
     ProgramSearchOptions options_;
     std::vector<Instruction> alphabet_;
     ProgramSearchStats stats_;
+    // Goal fast path: symbolic goals are evaluated through a cached-offset env.
+    std::vector<std::optional<problem::Constraint>> goal_constraints_;
+    mutable problem::OffsetEnv goal_env_;
 };
 
 }  // namespace combinatorial::automaton

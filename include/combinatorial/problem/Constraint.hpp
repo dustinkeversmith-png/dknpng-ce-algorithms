@@ -16,6 +16,7 @@
 
 #include <functional>
 #include <limits>
+#include <map>
 #include <memory>
 #include <set>
 #include <string>
@@ -54,6 +55,25 @@ public:
 
 private:
     const value::Value& v_;
+};
+
+/// Env over raw state bytes of a fixed type. Each path is resolved against the
+/// type once and cached; rebind() points the env at another buffer, so one env
+/// can evaluate constraints over many candidate states cheaply.
+class OffsetEnv final : public Env {
+public:
+    explicit OffsetEnv(value::TypePtr type, const std::byte* base = nullptr) : type_(std::move(type)), base_(base) {}
+    void rebind(const std::byte* base) noexcept { base_ = base; }
+    double value(std::string_view path) const override;
+
+private:
+    struct Slot {
+        std::size_t offset;
+        value::Prim prim;
+    };
+    value::TypePtr type_;
+    const std::byte* base_;
+    mutable std::map<std::string, Slot, std::less<>> cache_;
 };
 
 class Expr {

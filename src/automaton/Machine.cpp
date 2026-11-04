@@ -159,7 +159,10 @@ void require_state(const value::Value& s, const value::TypePtr& t) {
 
 void Machine::execute(const value::Value& state, const Instruction& ins) const {
     require_state(state, state_type_);
-    std::byte* base = state.data();
+    execute_raw(state.data(), ins);
+}
+
+void Machine::execute_raw(std::byte* base, const Instruction& ins) const {
     std::byte* regs = base + layout_.regs;
     std::byte* mem = base + layout_.mem;
     const std::uint32_t pc0 = ld<std::uint32_t>(base + layout_.pc);

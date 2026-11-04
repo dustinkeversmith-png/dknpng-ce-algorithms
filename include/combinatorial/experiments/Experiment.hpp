@@ -90,4 +90,13 @@ void record_search(Outcome& out, const automaton::ProgramSynthesizer& ps,
                    const std::optional<automaton::Program>& program);
 void record_validation(Outcome& out, const HeldOut& h, double seconds);
 
+// ---- RPN verification (exposed so alternative/mutated interpreters can be checked)
+/// The reference stack-machine interpreter used by the rpn_interpreter problem.
+/// Memory layout: ops u8[32] at 0, args i64[32] at 32, stack i64[32] at 288;
+/// r1 = tape length, r2 = stack pointer (bytes).
+automaton::Program rpn_reference_interpreter();
+/// Runs `interpreter` on random postfix programs with per-step invariants.
+HeldOut verify_rpn_interpreter(const automaton::Program& interpreter, std::size_t cases, std::uint64_t seed,
+                               std::uint64_t* steps = nullptr, std::uint64_t* transitions = nullptr);
+
 }  // namespace combinatorial::experiments

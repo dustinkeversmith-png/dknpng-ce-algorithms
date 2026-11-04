@@ -253,6 +253,41 @@ std::size_t sample(const value::Value& s, std::mt19937_64& rng) {
     return p.size() - 1;
 }
 
+double measure_forced(const value::Value& s, std::size_t q, int outcome) {
+    const std::size_t n = qubit_count(s);
+    check_qubit(n, q, "measure_forced");
+    if (outcome != 0 && outcome != 1) throw std::invalid_argument("measure_forced: outcome must be 0 or 1");
+    const double total = norm_squared(s);
+    const double p1 = probability_one(s, q) / total;
+    const double p = outcome ? p1 : 1 - p1;
+    const double k = p > 1e-15 ? 1.0 / std::sqrt(p * total) : 0.0;
+    for (std::size_t i = 0; i < (std::size_t{1} << n); ++i)
+        store(s.data(), i, (static_cast<int>(i >> q & 1) == outcome) ? load(s.data(), i) * k : Complex(0));
+    return p;
+}
+
+std::array<Complex, 4> reduced_density(const value::Value& s, std::size_t q) {
+    const std::size_t n = qubit_count(s);
+    check_qubit(n, q, "reduced_density");
+    std::array<Complex, 4> rho{};
+    const std::size_t bit = std::size_t{1} << q;
+    for (std::size_t i = 0; i < (std::size_t{1} << n); ++i) {
+        if (i & bit) continue;
+        const Complex a0 = load(s.data(), i), a1 = load(s.data(), i | bit);
+        rho[0] += a0 * std::conj(a0);
+        rho[1] += a0 * std::conj(a1);
+        rho[2] += a1 * std::conj(a0);
+        rho[3] += a1 * std::conj(a1);
+    }
+    return rho;
+}
+
+double fidelity_1q(const std::array<Complex, 4>& rho, Complex a, Complex b) {
+    // <psi| rho |psi> with |psi> = a|0> + b|1>
+    const Complex r = std::conj(a) * (rho[0] * a + rho[1] * b) + std::conj(b) * (rho[2] * a + rho[3] * b);
+    return r.real();
+}
+
 double purity(const value::Value& s, std::uint64_t mask) {
     const std::size_t n = qubit_count(s);
     if (mask >> n) throw std::out_of_range("purity: subsystem mask exceeds qubit count");
@@ -362,6 +397,113 @@ void apply(const value::Value& s, const Gate& g) {
         case K::Swap: return swap(s, q[0], q[1]);
         case K::Toffoli: return toffoli(s, q[0], q[1], q[2]);
     }
+}
+
+// ---------------------------------------------------------------- hybrid ---
+
+value::TypePtr hybrid_type(std::size_t qubits, std::size_t cbits) {
+    return value::ValueType::structure(
+        "Hybrid", {{"qreg", state_type(qubits)},
+                   {"classical_bits", value::ValueType::primitive("u8", value::Prim::U8, {cbits})}});
+}
+
+value::Value make_hybrid(std::size_t qubits, std::size_t cbits) {
+    value::Value h(hybrid_type(qubits, cbits), "hybrid");
+    set_amplitude(h.reference_member("qreg"), 0, 1.0);
+    return h;
+}
+
+std::string HybridOp::to_string() const {
+    switch (kind) {
+        case Kind::Gate: return gate.to_string();
+        case Kind::Measure: return "measure q" + std::to_string(qubit) + " -> c" + std::to_string(cbit);
+        case Kind::Conditional: return "if c" + std::to_string(cbit) + " " + gate.to_string();
+    }
+    return "?";
+}
+
+std::size_t HybridProgram::measurement_count() const noexcept {
+    std::size_t n = 0;
+    for (const auto& op : ops_) n += op.kind == HybridOp::Kind::Measure;
+    return n;
+}
+
+HybridProgram& HybridProgram::gate(Gate g) {
+    check_distinct(g.qubits, qubits_, "HybridProgram::gate");
+    ops_.push_back({HybridOp::Kind::Gate, std::move(g), 0, 0});
+    return *this;
+}
+
+HybridProgram& HybridProgram::measure(std::size_t q, std::size_t c) {
+    check_qubit(qubits_, q, "HybridProgram::measure");
+    if (c >= cbits_) throw std::out_of_range("HybridProgram::measure: classical bit out of range");
+    ops_.push_back({HybridOp::Kind::Measure, Gate{Gate::Kind::X, {0}}, q, c});
+    return *this;
+}
+
+HybridProgram& HybridProgram::conditional(Gate g, std::size_t c) {
+    check_distinct(g.qubits, qubits_, "HybridProgram::conditional");
+    if (c >= cbits_) throw std::out_of_range("HybridProgram::conditional: classical bit out of range");
+    ops_.push_back({HybridOp::Kind::Conditional, std::move(g), 0, c});
+    return *this;
+}
+
+HybridProgram& HybridProgram::append(const HybridProgram& other) {
+    if (other.qubits_ != qubits_ || other.cbits_ != cbits_)
+        throw std::invalid_argument("HybridProgram::append: register sizes differ");
+    ops_.insert(ops_.end(), other.ops_.begin(), other.ops_.end());
+    return *this;
+}
+
+void HybridProgram::check(const value::Value& h) const {
+    if (!h.type()->layout_equals(*hybrid_type(qubits_, cbits_)))
+        throw std::invalid_argument("HybridProgram: value is not a " + std::to_string(qubits_) + "-qubit/" +
+                                    std::to_string(cbits_) + "-bit hybrid state");
+}
+
+void HybridProgram::run(const value::Value& h, std::mt19937_64& rng) const {
+    check(h);
+    const value::Value q = h.reference_member("qreg"), c = h.reference_member("classical_bits");
+    for (const auto& op : ops_) {
+        switch (op.kind) {
+            case HybridOp::Kind::Gate: apply(q, op.gate); break;
+            case HybridOp::Kind::Measure: c[op.cbit].set<std::uint8_t>(static_cast<std::uint8_t>(quantum::measure(q, op.qubit, rng))); break;
+            case HybridOp::Kind::Conditional:
+                if (c[op.cbit].get<std::uint8_t>()) apply(q, op.gate);
+                break;
+        }
+    }
+}
+
+double HybridProgram::run_branch(const value::Value& h, const std::vector<int>& outcomes) const {
+    check(h);
+    if (outcomes.size() != measurement_count())
+        throw std::invalid_argument("HybridProgram::run_branch: one outcome per measurement required");
+    const value::Value q = h.reference_member("qreg"), c = h.reference_member("classical_bits");
+    double prob = 1;
+    std::size_t m = 0;
+    for (const auto& op : ops_) {
+        switch (op.kind) {
+            case HybridOp::Kind::Gate: apply(q, op.gate); break;
+            case HybridOp::Kind::Measure: {
+                const int o = outcomes[m++];
+                prob *= measure_forced(q, op.qubit, o);
+                c[op.cbit].set<std::uint8_t>(static_cast<std::uint8_t>(o));
+                if (prob <= 1e-15) return 0;
+                break;
+            }
+            case HybridOp::Kind::Conditional:
+                if (c[op.cbit].get<std::uint8_t>()) apply(q, op.gate);
+                break;
+        }
+    }
+    return prob;
+}
+
+std::string HybridProgram::to_string() const {
+    std::string out;
+    for (std::size_t i = 0; i < ops_.size(); ++i) out += (i ? "; " : "") + ops_[i].to_string();
+    return out;
 }
 
 Circuit& Circuit::add(Gate g) {

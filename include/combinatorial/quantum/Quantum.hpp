@@ -80,6 +80,15 @@ std::size_t sample(const value::Value& state, std::mt19937_64& rng);
 /// Probability that qubit q reads 1.
 double probability_one(const value::Value& state, std::size_t q);
 
+/// Collapses qubit q onto `outcome` (0/1) and renormalises. Returns the
+/// probability of that outcome; if it is ~0 the state is left unnormalised
+/// (all-zero on the kept branch) and the caller should discard the branch.
+double measure_forced(const value::Value& state, std::size_t q, int outcome);
+/// 2x2 reduced density matrix (row-major) of qubit q.
+std::array<Complex, 4> reduced_density(const value::Value& state, std::size_t q);
+/// <psi|rho|psi> for a single-qubit pure state psi = (a, b).
+double fidelity_1q(const std::array<Complex, 4>& rho, Complex a, Complex b);
+
 // ---- entanglement -----------------------------------------------------------------
 /// Purity Tr(rho_A^2) of the reduced state on the qubits in `subsystem_mask`.
 double purity(const value::Value& state, std::uint64_t subsystem_mask);
@@ -137,6 +146,49 @@ private:
 };
 
 void apply(const value::Value& state, const Gate& g);
+
+// ---- hybrid quantum-classical programs ------------------------------------------
+
+/// Layout {qreg: f64[2^N,2], classical_bits: u8[C]}.
+value::TypePtr hybrid_type(std::size_t qubits, std::size_t cbits);
+/// Hybrid state initialised to |0...0> with all classical bits 0.
+value::Value make_hybrid(std::size_t qubits, std::size_t cbits);
+
+struct HybridOp {
+    enum class Kind : std::uint8_t { Gate, Measure, Conditional };
+    Kind kind = Kind::Gate;
+    Gate gate{Gate::Kind::X, {0}};  ///< Gate / Conditional
+    std::size_t qubit = 0;          ///< Measure: measured qubit
+    std::size_t cbit = 0;           ///< Measure: destination bit; Conditional: controlling bit
+    std::string to_string() const;
+    bool operator==(const HybridOp&) const = default;
+};
+
+class HybridProgram {
+public:
+    HybridProgram(std::size_t qubits, std::size_t cbits) : qubits_(qubits), cbits_(cbits) {}
+    std::size_t qubits() const noexcept { return qubits_; }
+    std::size_t cbits() const noexcept { return cbits_; }
+    const std::vector<HybridOp>& ops() const noexcept { return ops_; }
+    std::size_t measurement_count() const noexcept;
+
+    HybridProgram& gate(Gate g);
+    HybridProgram& measure(std::size_t q, std::size_t c);
+    HybridProgram& conditional(Gate g, std::size_t c);  ///< apply g iff classical bit c == 1
+    HybridProgram& append(const HybridProgram& other);
+
+    /// Runs with random measurement outcomes.
+    void run(const value::Value& hybrid, std::mt19937_64& rng) const;
+    /// Runs with the given outcome for each measurement in order; returns the
+    /// branch probability (0 if the branch is impossible).
+    double run_branch(const value::Value& hybrid, const std::vector<int>& outcomes) const;
+    std::string to_string() const;
+
+private:
+    void check(const value::Value& hybrid) const;
+    std::size_t qubits_, cbits_;
+    std::vector<HybridOp> ops_;
+};
 /// U U^dagger == I within tolerance.
 bool is_unitary(const std::vector<Complex>& u, double tol = 1e-9);
 

@@ -43,10 +43,16 @@ Everything compiles with `-Wall -Wextra -Wpedantic -Werror`.
 | `value` | `value/*.hpp` | Packed recursive layouts, row-major tensor strides, zero-copy element/member/path views, bitwise and numeric scalar casts, dynamic operator table |
 | `problem` | `problem/*.hpp` | Invariant predicate trees, symbolic constraints with interval reasoning, SMT-LIB2 lowering, `Space` + set algebra, metrics, synthesizer, `ConstrainedSpace`, `BoxSpace` |
 | `automaton` | `automaton/*.hpp` | 30-opcode register machine whose state is a `Value`, step invariants T(Sₜ, Sₜ₊₁), example-driven program synthesis |
-| `quantum` | `quantum/Quantum.hpp` | `f64[2^N,2]` state Values, in-place gates, k-qubit contraction, measurement, purity, QFT/GHZ, circuit synthesis |
+| `quantum` | `quantum/Quantum.hpp` | `f64[2^N,2]` state Values, in-place gates, k-qubit contraction, measurement (random and forced-branch), reduced density, purity, QFT/GHZ, circuit synthesis, hybrid programs with classical control |
+| `automaton` (sketches) | `automaton/Sketch.hpp` | Assembly with labels and `?? N` holes; hole-filling synthesis with dead-write pruning |
+| `experiments` | `experiments/Experiment.hpp` | Problem catalogue: train-only search, held-out validation, CEGIS; `combi experiments` |
 
-See [docs/architecture.md](docs/architecture.md) for the design and
-[docs/guide.md](docs/guide.md) for worked examples.
+See [docs/architecture.md](docs/architecture.md) for the design,
+[docs/guide.md](docs/guide.md) for worked examples and
+[docs/experiments.md](docs/experiments.md) for the problem catalogue and its
+results. Nine problems: Bell state, Rule 110, popcount (straight-line and
+loop), GCD, in-place reversal, matrix transpose, teleportation, and an RPN
+interpreter. All nine are verified on held-out inputs.
 
 ## CLI
 
@@ -74,9 +80,14 @@ verified on 3 examples
 ./build/release/tools/combi run "movi r0 6; movi r1 7; mul r2 r0 r1; halt"
 ```
 
+```bash
+./build/release/tools/combi experiments
+```
+
 ## Tests
 
-* 101 GoogleTest cases across value, invariant/SMT, space/synthesis, automaton and quantum suites
+* 199 GoogleTest cases across value, invariant/SMT, space/synthesis, automaton, quantum, sketch,
+  hybrid-quantum and experiment suites (including every catalogue problem in quick mode)
 * 6 fuzz harnesses (`fuzz/`): reference paths, type expressions, assembler, SMT models,
   raw machine words, and a value/quantum op-stream. They expose `LLVMFuzzerTestOneInput`
   and ship a standalone driver: `./build/asan/fuzz/fuzz_path --runs=1000000 --seed=7`

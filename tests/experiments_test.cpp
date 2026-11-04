@@ -1,5 +1,8 @@
 #include "combinatorial/automaton.hpp"
 #include "combinatorial/experiments/Experiment.hpp"
+#include "combinatorial/quantum/Quantum.hpp"
+
+#include <cmath>
 
 #include <gtest/gtest.h>
 
@@ -137,6 +140,141 @@ TEST(SketchTest, SynthesizesCountdownLoop) {
     EXPECT_THROW(SketchSynthesizer(m, Sketch::parse("?? 1 nope"), ex, o), std::invalid_argument);
     SketchSynthesizer none(m, Sketch::parse("?? 1"), ex, o);
     EXPECT_FALSE(none.synthesize());
+}
+
+// ---------------------------------------------------- hybrid quantum ops ---
+
+namespace {
+quantum::HybridProgram teleport_prefix() {
+    using quantum::Gate;
+    quantum::HybridProgram p(3, 2);
+    p.gate({Gate::Kind::H, {1}})
+        .gate({Gate::Kind::CNOT, {1, 2}})
+        .gate({Gate::Kind::CNOT, {0, 1}})
+        .gate({Gate::Kind::H, {0}})
+        .measure(0, 0)
+        .measure(1, 1);
+    return p;
+}
+
+/// Minimum q2 fidelity over all branches for psi = (a, b).
+double worst_teleport_fidelity(const quantum::HybridProgram& p, quantum::Complex a, quantum::Complex b) {
+    double worst = 1;
+    for (int m0 = 0; m0 < 2; ++m0)
+        for (int m1 = 0; m1 < 2; ++m1) {
+            auto h = quantum::make_hybrid(3, 2);
+            const auto q = h.reference_member("qreg");
+            quantum::set_amplitude(q, 0, a);
+            quantum::set_amplitude(q, 1, b);
+            if (p.run_branch(h, {m0, m1}) <= 1e-12) continue;
+            worst = std::min(worst, quantum::fidelity_1q(quantum::reduced_density(q, 2), a, b));
+        }
+    return worst;
+}
+}  // namespace
+
+TEST(HybridQuantum, ForcedMeasurementAndReducedDensity) {
+    using quantum::Gate;
+    auto psi = quantum::make_state(2);
+    quantum::hadamard(psi, 0);
+    auto rho = quantum::reduced_density(psi, 0);
+    EXPECT_NEAR(rho[0].real(), 0.5, 1e-12);
+    EXPECT_NEAR(rho[1].real(), 0.5, 1e-12);  // coherent superposition
+    EXPECT_NEAR(quantum::fidelity_1q(rho, 1 / std::sqrt(2.0), 1 / std::sqrt(2.0)), 1, 1e-12);
+    auto c = psi.clone();
+    EXPECT_NEAR(quantum::measure_forced(c, 0, 1), 0.5, 1e-12);
+    EXPECT_NEAR(std::abs(quantum::amplitude(c, 1)), 1, 1e-12);
+    auto z = quantum::make_state(1);
+    EXPECT_NEAR(quantum::measure_forced(z, 0, 1), 0, 1e-12);  // impossible branch
+    EXPECT_THROW(quantum::measure_forced(z, 0, 2), std::invalid_argument);
+    // Bell pair: each qubit alone is maximally mixed
+    quantum::Circuit bell(2);
+    bell.h(0).cnot(0, 1);
+    auto b = bell.run();
+    auto rb = quantum::reduced_density(b, 1);
+    EXPECT_NEAR(rb[0].real(), 0.5, 1e-12);
+    EXPECT_NEAR(std::abs(rb[1]), 0, 1e-12);
+}
+
+TEST(HybridQuantum, BranchProbabilitiesAndClassicalBits) {
+    using quantum::Gate;
+    auto prog = teleport_prefix();
+    EXPECT_EQ(prog.measurement_count(), 2u);
+    double total = 0;
+    for (int m0 = 0; m0 < 2; ++m0)
+        for (int m1 = 0; m1 < 2; ++m1) {
+            auto h = quantum::make_hybrid(3, 2);
+            quantum::set_amplitude(h.reference_member("qreg"), 0, 0.6);
+            quantum::set_amplitude(h.reference_member("qreg"), 1, 0.8);
+            const double p = prog.run_branch(h, {m0, m1});
+            EXPECT_NEAR(p, 0.25, 1e-12);
+            total += p;
+            EXPECT_EQ(h.reference("classical_bits[0]").get<std::uint8_t>(), m0);
+            EXPECT_EQ(h.reference("classical_bits[1]").get<std::uint8_t>(), m1);
+            EXPECT_NEAR(quantum::norm_squared(h.reference_member("qreg")), 1, 1e-12);
+        }
+    EXPECT_NEAR(total, 1, 1e-12);
+    // random-outcome run records bits consistent with the collapsed state
+    std::mt19937_64 rng(3);
+    for (int i = 0; i < 20; ++i) {
+        auto h = quantum::make_hybrid(3, 2);
+        quantum::set_amplitude(h.reference_member("qreg"), 0, 1);
+        prog.run(h, rng);
+        const auto q = h.reference_member("qreg");
+        const int c0 = h.reference("classical_bits[0]").get<std::uint8_t>();
+        EXPECT_NEAR(quantum::probability_one(q, 0), c0, 1e-12);
+    }
+    EXPECT_THROW(prog.run_branch(quantum::make_hybrid(3, 2), {0}), std::invalid_argument);
+    EXPECT_THROW(prog.run_branch(quantum::make_hybrid(2, 2), {0, 0}), std::invalid_argument);
+    EXPECT_THROW(quantum::HybridProgram(3, 2).measure(0, 2), std::out_of_range);
+}
+
+TEST(HybridQuantum, OnlyCorrectCorrectionsTeleport) {
+    using quantum::Gate;
+    const quantum::Complex a(0.6, 0), b(0, 0.8);
+    auto good = teleport_prefix();
+    good.conditional({Gate::Kind::Z, {2}}, 0).conditional({Gate::Kind::X, {2}}, 1);
+    EXPECT_NEAR(worst_teleport_fidelity(good, a, b), 1, 1e-9);
+    auto swapped = teleport_prefix();  // X and Z controls swapped
+    swapped.conditional({Gate::Kind::X, {2}}, 0).conditional({Gate::Kind::Z, {2}}, 1);
+    // Wrong corrections can still overlap with psi (0.92 here), but must fall
+    // clearly below the verifier's 1 - 1e-9 threshold.
+    EXPECT_LT(worst_teleport_fidelity(swapped, a, b), 1 - 1e-3);
+    EXPECT_LT(worst_teleport_fidelity(teleport_prefix(), a, b), 1 - 1e-3);  // no correction
+}
+
+// ---------------------------------------------- verifier must catch mutants ---
+
+TEST(RpnVerifier, AcceptsReferenceAndRejectsMutants) {
+    using namespace automaton;
+    const Program ref = experiments::rpn_reference_interpreter();
+    auto h = experiments::verify_rpn_interpreter(ref, 80, 9);
+    EXPECT_EQ(h.passed, h.cases) << h.first_failure;
+    auto mutate = [&](auto pred, auto edit) {
+        Program p = ref;
+        for (auto& ins : p)
+            if (pred(ins)) {
+                edit(ins);
+                return p;
+            }
+        ADD_FAILURE() << "mutation site not found";
+        return p;
+    };
+    const std::vector<std::pair<std::string, Program>> mutants = {
+        {"sub operands swapped", mutate([](const Instruction& i) { return i.op == Op::Sub; },
+                                        [](Instruction& i) { std::swap(i.b, i.c); })},
+        {"mul -> add", mutate([](const Instruction& i) { return i.op == Op::Mul; },
+                              [](Instruction& i) { i.op = Op::Add; })},
+        {"push stride 16", mutate([](const Instruction& i) { return i.op == Op::Addi && i.a == 2 && i.imm == 8; },
+                                  [](Instruction& i) { i.imm = 16; })},
+        {"args read one slot late", mutate([](const Instruction& i) { return i.op == Op::Ld && i.imm == 32; },
+                                           [](Instruction& i) { i.imm = 40; })},
+    };
+    for (const auto& [what, p] : mutants) {
+        auto r = experiments::verify_rpn_interpreter(p, 80, 9);
+        EXPECT_LT(r.passed, r.cases) << what << " was not detected";
+        EXPECT_FALSE(r.first_failure.empty()) << what;
+    }
 }
 
 // ------------------------------------------------------- problem catalog ---

@@ -5,6 +5,7 @@
 #include <charconv>
 #include <cstring>
 #include <limits>
+#include <map>
 #include <sstream>
 #include <stdexcept>
 
@@ -82,8 +83,24 @@ std::string to_string(const Program& p) {
     return s;
 }
 
-Program assemble(std::string_view text) {
-    Program out;
+namespace {
+
+bool is_label_name(std::string_view s) {
+    if (s.empty() || !(std::isalpha(static_cast<unsigned char>(s[0])) || s[0] == '_')) return false;
+    for (char ch : s)
+        if (!(std::isalnum(static_cast<unsigned char>(ch)) || ch == '_')) return false;
+    return true;
+}
+
+/// Splits source into statements (by ';' / newline), strips comments and
+/// commas, and peels leading `label:` definitions off each statement.
+struct Statement {
+    std::vector<std::string> labels;
+    std::string body;
+};
+
+std::vector<Statement> split_statements(std::string_view text) {
+    std::vector<Statement> out;
     std::size_t pos = 0;
     while (pos <= text.size()) {
         std::size_t end = text.find_first_of(";\n", pos);
@@ -93,6 +110,42 @@ Program assemble(std::string_view text) {
         if (auto hash = line.find('#'); hash != std::string::npos) line.resize(hash);
         for (char& ch : line)
             if (ch == ',') ch = ' ';
+        Statement st;
+        for (;;) {
+            std::istringstream is(line);
+            std::string first;
+            if (!(is >> first) || first.back() != ':') break;
+            const std::string name = first.substr(0, first.size() - 1);
+            if (!is_label_name(name)) throw std::invalid_argument("assemble: bad label '" + first + "'");
+            st.labels.push_back(name);
+            line = line.substr(line.find(':') + 1);
+        }
+        st.body = line;
+        out.push_back(std::move(st));
+    }
+    return out;
+}
+
+}  // namespace
+
+Program assemble(std::string_view text) {
+    // Pass 1: label -> instruction index.
+    const auto statements = split_statements(text);
+    std::map<std::string, std::int32_t, std::less<>> labels;
+    {
+        std::int32_t index = 0;
+        for (const auto& st : statements) {
+            for (const auto& l : st.labels)
+                if (!labels.emplace(l, index).second) throw std::invalid_argument("assemble: duplicate label '" + l + "'");
+            std::istringstream is(st.body);
+            std::string mnemonic;
+            if (is >> mnemonic) ++index;
+        }
+    }
+    // Pass 2: instructions, with identifier immediates resolved as labels.
+    Program out;
+    for (const auto& st : statements) {
+        const std::string& line = st.body;
         std::istringstream is(line);
         std::string mnemonic;
         if (!(is >> mnemonic)) continue;
@@ -116,6 +169,15 @@ Program assemble(std::string_view text) {
         if (m & 8) {
             std::string tok;
             if (!(is >> tok)) throw std::invalid_argument("assemble: expected immediate in '" + line + "'");
+            if (is_label_name(tok)) {
+                auto it = labels.find(tok);
+                if (it == labels.end()) throw std::invalid_argument("assemble: unknown label '" + tok + "'");
+                ins.imm = it->second;
+                std::string extra;
+                if (is >> extra) throw std::invalid_argument("assemble: trailing operand '" + extra + "' in '" + line + "'");
+                out.push_back(ins);
+                continue;
+            }
             long long v = 0;
             auto [p, ec] = std::from_chars(tok.data(), tok.data() + tok.size(), v);
             if (ec != std::errc{} || p != tok.data() + tok.size() || v < std::numeric_limits<std::int32_t>::min() ||

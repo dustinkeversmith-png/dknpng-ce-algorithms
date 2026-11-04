@@ -6,6 +6,7 @@
 //   combi queens N [--all]
 //   combi smt "<constraint over x,y,z>"     (prints SMT-LIB2 for i32 x,y,z)
 #include "combinatorial/automaton.hpp"
+#include "combinatorial/experiments/Experiment.hpp"
 #include "combinatorial/problem.hpp"
 #include "combinatorial/quantum/Quantum.hpp"
 #include "combinatorial/value.hpp"
@@ -27,8 +28,42 @@ int usage() {
                  "  combi run \"<asm>\" [--reg rN=V ...] [--steps N]\n"
                  "  combi synth --example IN[,IN...]=OUT ... [--len N] [--regs N] [--plain]\n"
                  "  combi quantum (--qubits N --circuit \"h q0; cx q0,q1\" | ghz N | qft N) [--shots N] [--seed S]\n"
-                 "  combi queens N [--all]\n";
+                 "  combi queens N [--all]\n"
+                 "  combi experiments [--quick] [--seed S] [--only NAME] [--list]\n";
     return 2;
+}
+
+int cmd_experiments(const std::vector<std::string>& args) {
+    experiments::RunConfig cfg;
+    std::string only;
+    bool list = false;
+    for (std::size_t i = 0; i < args.size(); ++i) {
+        if (args[i] == "--quick") cfg.quick = true;
+        else if (args[i] == "--seed" && i + 1 < args.size()) cfg.seed = std::stoull(args[++i]);
+        else if (args[i] == "--only" && i + 1 < args.size()) only = args[++i];
+        else if (args[i] == "--list") list = true;
+        else return usage();
+    }
+    std::vector<std::pair<experiments::ProblemPtr, experiments::Outcome>> results;
+    for (const auto& p : experiments::catalog()) {
+        if (!only.empty() && p->name() != only) continue;
+        if (list) {
+            std::cout << std::left << std::setw(22) << p->name() << std::setw(13) << p->mode() << p->description() << "\n";
+            continue;
+        }
+        std::cerr << "running " << p->name() << " ...\n";
+        results.emplace_back(p, p->run(cfg));
+    }
+    if (list) return 0;
+    if (results.empty()) {
+        std::cerr << "no problem named '" << only << "'\n";
+        return 2;
+    }
+    std::cout << experiments::format_report(results);
+    std::size_t verified = 0;
+    for (const auto& [p, o] : results) verified += o.verified;
+    std::cout << verified << "/" << results.size() << " problems verified on held-out inputs\n";
+    return verified == results.size() ? 0 : 1;
 }
 
 std::vector<std::int64_t> parse_ints(const std::string& s) {
@@ -272,6 +307,7 @@ int main(int argc, char** argv) {
         if (cmd == "synth") return cmd_synth(args);
         if (cmd == "quantum") return cmd_quantum(args);
         if (cmd == "queens") return cmd_queens(args);
+        if (cmd == "experiments") return cmd_experiments(args);
         if (cmd == "-h" || cmd == "--help") {
             usage();
             return 0;

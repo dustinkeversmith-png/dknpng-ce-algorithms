@@ -1,9 +1,9 @@
 #include "combinatorial/automaton/ProgramSynthesizer.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cstring>
 #include <stdexcept>
-#include <unordered_set>
 
 namespace combinatorial::automaton {
 
@@ -28,6 +28,57 @@ bool is_control(Op op) {
 
 }  // namespace
 
+std::vector<Instruction> make_alphabet(const ProgramSearchOptions& options) {
+    if (options.registers == 0 || options.registers > kRegisters)
+        throw std::invalid_argument("ProgramSynthesizer: registers must be in [1, 8]");
+    if (!options.alphabet.empty()) {
+        for (const auto& ins : options.alphabet)
+            if (is_control(ins.op))
+                throw std::invalid_argument("ProgramSynthesizer: control-flow opcodes are not searchable");
+        return options.alphabet;
+    }
+    std::vector<Instruction> out;
+    const auto R = static_cast<std::uint8_t>(options.registers);
+    for (Op op : options.ops) {
+        if (is_control(op)) throw std::invalid_argument("ProgramSynthesizer: control-flow opcodes are not searchable");
+        Instruction ins{op, 0, 0, 0, 0};
+        switch (op) {
+            case Op::Nop: out.push_back(ins); break;
+            case Op::Movi:
+                for (std::uint8_t a = 0; a < R; ++a)
+                    for (auto imm : options.immediates) out.push_back({op, a, 0, 0, imm});
+                break;
+            case Op::Mov: case Op::Neg: case Op::Not: case Op::Cmp:
+                for (std::uint8_t a = 0; a < R; ++a)
+                    for (std::uint8_t b = 0; b < R; ++b) {
+                        if (op == Op::Mov && a == b) continue;  // no-op
+                        if (op == Op::Cmp && a == b) continue;
+                        out.push_back({op, a, b, 0, 0});
+                    }
+                break;
+            case Op::Addi: case Op::Ld: case Op::St: case Op::Ldb: case Op::Stb:
+                for (std::uint8_t a = 0; a < R; ++a)
+                    for (std::uint8_t b = 0; b < R; ++b)
+                        for (auto imm : options.immediates) {
+                            if (op == Op::Addi && imm == 0 && a == b) continue;
+                            out.push_back({op, a, b, 0, imm});
+                        }
+                break;
+            case Op::Push: case Op::Pop:
+                for (std::uint8_t a = 0; a < R; ++a) out.push_back({op, a, 0, 0, 0});
+                break;
+            default:  // three-register ALU
+                for (std::uint8_t a = 0; a < R; ++a)
+                    for (std::uint8_t b = 0; b < R; ++b)
+                        for (std::uint8_t c = 0; c < R; ++c) {
+                            if (commutative(op) && b > c) continue;
+                            out.push_back({op, a, b, c, 0});
+                        }
+        }
+    }
+    return out;
+}
+
 ProgramSynthesizer::ProgramSynthesizer(const Machine& machine, std::vector<Example> examples, ProgramSearchOptions options)
     : machine_(machine),
       examples_(std::move(examples)),
@@ -38,46 +89,14 @@ ProgramSynthesizer::ProgramSynthesizer(const Machine& machine, std::vector<Examp
     for (const auto& e : examples_)
         if (!e.input.type()->layout_equals(*machine_.state_type()))
             throw std::invalid_argument("ProgramSynthesizer: example input is not a machine state");
-    if (options_.registers == 0 || options_.registers > kRegisters)
-        throw std::invalid_argument("ProgramSynthesizer: registers must be in [1, 8]");
-    const auto R = static_cast<std::uint8_t>(options_.registers);
-    for (Op op : options_.ops) {
-        if (is_control(op)) throw std::invalid_argument("ProgramSynthesizer: control-flow opcodes are not searchable");
-        Instruction ins{op, 0, 0, 0, 0};
-        switch (op) {
-            case Op::Nop: alphabet_.push_back(ins); break;
-            case Op::Movi:
-                for (std::uint8_t a = 0; a < R; ++a)
-                    for (auto imm : options_.immediates) alphabet_.push_back({op, a, 0, 0, imm});
-                break;
-            case Op::Mov: case Op::Neg: case Op::Not: case Op::Cmp:
-                for (std::uint8_t a = 0; a < R; ++a)
-                    for (std::uint8_t b = 0; b < R; ++b) {
-                        if (op == Op::Mov && a == b) continue;  // no-op
-                        if (op == Op::Cmp && a == b) continue;
-                        alphabet_.push_back({op, a, b, 0, 0});
-                    }
-                break;
-            case Op::Addi: case Op::Ld: case Op::St: case Op::Ldb: case Op::Stb:
-                for (std::uint8_t a = 0; a < R; ++a)
-                    for (std::uint8_t b = 0; b < R; ++b)
-                        for (auto imm : options_.immediates) {
-                            if (op == Op::Addi && imm == 0 && a == b) continue;
-                            alphabet_.push_back({op, a, b, 0, imm});
-                        }
-                break;
-            case Op::Push: case Op::Pop:
-                for (std::uint8_t a = 0; a < R; ++a) alphabet_.push_back({op, a, 0, 0, 0});
-                break;
-            default:  // three-register ALU
-                for (std::uint8_t a = 0; a < R; ++a)
-                    for (std::uint8_t b = 0; b < R; ++b)
-                        for (std::uint8_t c = 0; c < R; ++c) {
-                            if (commutative(op) && b > c) continue;
-                            alphabet_.push_back({op, a, b, c, 0});
-                        }
-        }
+    alphabet_ = make_alphabet(options_);
+    // Registers the alphabet can touch and whether it touches memory decide
+    // which state bytes the search must track (see search_oe).
+    for (const auto& ins : alphabet_) {
+        memory_ops_ |= uses_memory(ins.op);
+        key_registers_ = std::max<std::size_t>({key_registers_, ins.a + 1u, ins.b + 1u, ins.c + 1u});
     }
+    key_registers_ = std::min(key_registers_, kRegisters);
 }
 
 bool ProgramSynthesizer::goals_hold(const std::vector<value::Value>& states) const {
@@ -180,13 +199,12 @@ std::optional<Program> ProgramSynthesizer::search_oe() {
     const std::size_t S = machine_.state_type()->byte_size();
     const std::size_t T = n * S;  // bytes per search node: one state per example
     const Machine::Layout L = machine_.layout();
-    bool memory_ops = false;
-    for (Op op : options_.ops) memory_ops |= uses_memory(op);
+    const bool memory_ops = memory_ops_;
     // Bytes that can distinguish two nodes. Without memory ops the alphabet
     // only writes flags and r0..r(R-1); everything else (other registers, sp,
     // halt byte of surviving nodes, memory) is constant per example, and pc is
     // the depth. With memory ops, everything from sp onward may change.
-    const std::size_t R = options_.registers;
+    const std::size_t R = key_registers_;
     struct Span {
         std::size_t offset, len;
     };

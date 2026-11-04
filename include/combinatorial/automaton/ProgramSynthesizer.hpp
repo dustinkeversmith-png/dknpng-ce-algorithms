@@ -35,7 +35,13 @@ struct ProgramSearchOptions {
     std::size_t max_length = 4;
     std::uint64_t max_states = 20'000'000;
     bool observational_equivalence = true;
+    /// Explicit instruction alphabet; when non-empty it replaces the one
+    /// generated from ops x registers x immediates.
+    std::vector<Instruction> alphabet = {};
 };
+
+/// The instruction alphabet a search over `options` enumerates.
+std::vector<Instruction> make_alphabet(const ProgramSearchOptions& options);
 
 struct ProgramSearchStats {
     std::uint64_t states = 0;           ///< instruction applications (per example tuple)
@@ -70,6 +76,8 @@ private:
     // Goal fast path: symbolic goals are evaluated through a cached-offset env.
     std::vector<std::optional<problem::Constraint>> goal_constraints_;
     mutable problem::OffsetEnv goal_env_;
+    std::size_t key_registers_ = 0;  // registers the alphabet can touch
+    bool memory_ops_ = false;        // alphabet touches memory or the stack
 };
 
 }  // namespace combinatorial::automaton

@@ -1,3 +1,0 @@
-find_package(benchmark REQUIRED)
-add_executable(combinatorial_bench bench_main.cpp)
-target_link_libraries(combinatorial_bench PRIVATE combinatorial combinatorial_warnings benchmark::benchmark benchmark::benchmark_main)

@@ -1,5 +1,7 @@
 #include "combinatorial/problem/Constraint.hpp"
 
+#include "IntervalMath.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <sstream>
@@ -29,25 +31,8 @@ struct Expr::Node {
 
 namespace {
 
-Interval add(Interval a, Interval b) { return {a.lo + b.lo, a.hi + b.hi}; }
-Interval neg(Interval a) { return {-a.hi, -a.lo}; }
-
-double mul_bound(double x, double y) {
-    // 0 * inf contributes 0 to a product bound (the zero endpoint is attained).
-    if (x == 0 || y == 0) return 0;
-    return x * y;
-}
-
-Interval mul(Interval a, Interval b) {
-    const double c[4] = {mul_bound(a.lo, b.lo), mul_bound(a.lo, b.hi), mul_bound(a.hi, b.lo), mul_bound(a.hi, b.hi)};
-    return {*std::min_element(c, c + 4), *std::max_element(c, c + 4)};
-}
-
-Interval iabs(Interval a) {
-    if (a.lo >= 0) return a;
-    if (a.hi <= 0) return neg(a);
-    return {0, std::max(-a.lo, a.hi)};
-}
+using detail::compare_intervals;
+using detail::compare_values;
 
 std::string fmt(double v) {
     std::ostringstream os;
@@ -95,19 +80,13 @@ Interval Expr::bounds(const Env& env) const {
     switch (n.op) {
         case Op::Const: return Interval::point(n.value);
         case Op::Var: return env.range(n.path);
-        case Op::Add: return add(n.args[0].bounds(env), n.args[1].bounds(env));
-        case Op::Sub: return add(n.args[0].bounds(env), neg(n.args[1].bounds(env)));
-        case Op::Mul: return mul(n.args[0].bounds(env), n.args[1].bounds(env));
-        case Op::Neg: return neg(n.args[0].bounds(env));
-        case Op::Abs: return iabs(n.args[0].bounds(env));
-        case Op::Min: {
-            Interval a = n.args[0].bounds(env), b = n.args[1].bounds(env);
-            return {std::min(a.lo, b.lo), std::min(a.hi, b.hi)};
-        }
-        case Op::Max: {
-            Interval a = n.args[0].bounds(env), b = n.args[1].bounds(env);
-            return {std::max(a.lo, b.lo), std::max(a.hi, b.hi)};
-        }
+        case Op::Add: return detail::iv_add(n.args[0].bounds(env), n.args[1].bounds(env));
+        case Op::Sub: return detail::iv_add(n.args[0].bounds(env), detail::iv_neg(n.args[1].bounds(env)));
+        case Op::Mul: return detail::iv_mul(n.args[0].bounds(env), n.args[1].bounds(env));
+        case Op::Neg: return detail::iv_neg(n.args[0].bounds(env));
+        case Op::Abs: return detail::iv_abs(n.args[0].bounds(env));
+        case Op::Min: return detail::iv_min(n.args[0].bounds(env), n.args[1].bounds(env));
+        case Op::Max: return detail::iv_max(n.args[0].bounds(env), n.args[1].bounds(env));
     }
     return Interval::everything();
 }
@@ -154,42 +133,6 @@ const char* cmp_symbol(Constraint::Op op) {
     }
 }
 
-bool compare_values(Constraint::Op op, double a, double b) {
-    switch (op) {
-        case Constraint::Op::Eq: return a == b;
-        case Constraint::Op::Ne: return a != b;
-        case Constraint::Op::Lt: return a < b;
-        case Constraint::Op::Le: return a <= b;
-        case Constraint::Op::Gt: return a > b;
-        case Constraint::Op::Ge: return a >= b;
-        default: return false;
-    }
-}
-
-Tri compare_intervals(Constraint::Op op, Interval a, Interval b) {
-    if (std::isnan(a.lo) || std::isnan(a.hi) || std::isnan(b.lo) || std::isnan(b.hi)) return Tri::Unknown;
-    switch (op) {
-        case Constraint::Op::Lt:
-            if (a.hi < b.lo) return Tri::True;
-            if (a.lo >= b.hi) return Tri::False;
-            return Tri::Unknown;
-        case Constraint::Op::Le:
-            if (a.hi <= b.lo) return Tri::True;
-            if (a.lo > b.hi) return Tri::False;
-            return Tri::Unknown;
-        case Constraint::Op::Gt: return compare_intervals(Constraint::Op::Lt, b, a);
-        case Constraint::Op::Ge: return compare_intervals(Constraint::Op::Le, b, a);
-        case Constraint::Op::Eq:
-            if (a.hi < b.lo || b.hi < a.lo) return Tri::False;
-            if (a.is_point() && b.is_point()) return Tri::True;  // overlapping points are equal
-            return Tri::Unknown;
-        case Constraint::Op::Ne: {
-            Tri eq = compare_intervals(Constraint::Op::Eq, a, b);
-            return eq == Tri::True ? Tri::False : (eq == Tri::False ? Tri::True : Tri::Unknown);
-        }
-        default: return Tri::Unknown;
-    }
-}
 }  // namespace
 
 Constraint Constraint::always() { return Constraint(std::make_shared<Node>(Node{Op::True, {}, {}})); }

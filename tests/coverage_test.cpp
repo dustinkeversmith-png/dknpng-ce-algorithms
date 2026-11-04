@@ -376,6 +376,89 @@ TEST(SynthesizerCoverage, MinConflictsWithLargeDomainsAndNoise) {
     EXPECT_TRUE(space->contains(*sol));
 }
 
+// ------------------------------------------- compiled-evaluator oracle ---
+
+namespace {
+Expr random_expr(std::mt19937_64& rng, int depth) {
+    std::uniform_int_distribution<int> pick(0, depth <= 0 ? 1 : 8);
+    std::uniform_int_distribution<int> leaf(0, 3), konst(-3, 6);
+    switch (pick(rng)) {
+        case 0: return Expr(static_cast<double>(konst(rng)));
+        case 1: return var("[" + std::to_string(leaf(rng)) + "]");
+        case 2: return random_expr(rng, depth - 1) + random_expr(rng, depth - 1);
+        case 3: return random_expr(rng, depth - 1) - random_expr(rng, depth - 1);
+        case 4: return random_expr(rng, depth - 1) * random_expr(rng, depth - 1);
+        case 5: return -random_expr(rng, depth - 1);
+        case 6: return abs(random_expr(rng, depth - 1));
+        case 7: return min(random_expr(rng, depth - 1), random_expr(rng, depth - 1));
+        default: return max(random_expr(rng, depth - 1), random_expr(rng, depth - 1));
+    }
+}
+
+Constraint random_formula(std::mt19937_64& rng, int depth) {
+    std::uniform_int_distribution<int> pick(0, depth <= 0 ? 5 : 10);
+    const int k = pick(rng);
+    if (k <= 5) {
+        static const Constraint::Op ops[] = {Constraint::Op::Eq, Constraint::Op::Ne, Constraint::Op::Lt,
+                                             Constraint::Op::Le, Constraint::Op::Gt, Constraint::Op::Ge};
+        return Constraint::compare(ops[k], random_expr(rng, 2), random_expr(rng, 2));
+    }
+    if (k == 6) return random_formula(rng, depth - 1) && random_formula(rng, depth - 1);
+    if (k == 7) return random_formula(rng, depth - 1) || random_formula(rng, depth - 1);
+    if (k == 8) return !random_formula(rng, depth - 1);
+    if (k == 9) return Constraint::always();
+    return Constraint::never() || random_formula(rng, depth - 1);
+}
+}  // namespace
+
+TEST(CompiledEvaluator, CountsMatchBruteForceOnRandomFormulas) {
+    // The synthesizer evaluates compiled formulas and prunes with compiled
+    // interval bounds; brute force uses the reference AST evaluator. Any
+    // evaluation mismatch or unsound pruning changes the count.
+    value::TypeRegistry reg;
+    auto t = reg.get("i8[4]");
+    const Domain dom = Domain::range(-2, 3);
+    std::mt19937_64 rng(2024);
+    for (int trial = 0; trial < 150; ++trial) {
+        std::vector<Invariant> invs;
+        const int n = 1 + static_cast<int>(rng() % 3);
+        for (int i = 0; i < n; ++i) invs.emplace_back(random_formula(rng, 3));
+        std::vector<DecisionLeaf> leaves;
+        for (int i = 0; i < 4; ++i) leaves.push_back({"[" + std::to_string(i) + "]", dom});
+
+        std::size_t brute = 0;
+        Value v(t);
+        for (double a : dom.values)
+            for (double b : dom.values)
+                for (double c : dom.values)
+                    for (double d : dom.values) {
+                        v.set_scalar(0, a);
+                        v.set_scalar(1, b);
+                        v.set_scalar(2, c);
+                        v.set_scalar(3, d);
+                        bool ok = true;
+                        for (const auto& inv : invs) ok = ok && inv.holds(v);
+                        brute += ok;
+                    }
+        for (bool pruning : {true, false}) {
+            Synthesizer s(Value(t), leaves, invs, SynthesisOptions{.interval_pruning = pruning});
+            EXPECT_EQ(s.count(), brute) << "trial " << trial << " pruning=" << pruning << " "
+                                        << invs.front().description();
+        }
+        // min-conflicts / nearest results are members when found
+        Synthesizer s(Value(t), leaves, invs, SynthesisOptions{.seed = static_cast<std::uint64_t>(trial)});
+        if (auto m = s.min_conflicts(500)) {
+            for (const auto& inv : invs) EXPECT_TRUE(inv.holds(*m));
+        }
+        if (auto p = Synthesizer(Value(t), leaves, invs).nearest(Value(t), Norm::L1)) {
+            for (const auto& inv : invs) EXPECT_TRUE(inv.holds(*p));
+            EXPECT_GT(brute, 0u);
+        } else {
+            EXPECT_EQ(brute, 0u);
+        }
+    }
+}
+
 // --------------------------------------------------------------- misc ---
 
 TEST(MiscCoverage, NormNamesAndDomainErrors) {

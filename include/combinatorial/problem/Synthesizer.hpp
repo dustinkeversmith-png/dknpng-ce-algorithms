@@ -23,6 +23,7 @@
 #include <chrono>
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <optional>
 #include <random>
 #include <string>
@@ -69,6 +70,17 @@ public:
     const SynthesisStats& stats() const noexcept { return stats_; }
     std::size_t decision_count() const noexcept { return vars_.size(); }
 
+    // ---- implementation details (public only so the evaluator can name them)
+    /// A leaf read by a compiled constraint: absolute byte offset in the
+    /// working value, primitive kind, and decision index (SIZE_MAX if fixed).
+    struct Slot {
+        std::size_t offset;
+        value::Prim prim;
+        std::size_t var;
+    };
+    /// Flat, slot-indexed form of a symbolic constraint (see Synthesizer.cpp).
+    struct Compiled;
+
 private:
     struct Var {
         std::string path;
@@ -82,17 +94,20 @@ private:
         bool unknown_deps = false;
         bool symbolic = false;
         std::size_t ready_at = 0;           // position in order after which it is fully assigned
+        std::shared_ptr<const Compiled> compiled;  // set for symbolic checks
     };
 
     void reset_stats();
     void finish_stats(std::chrono::steady_clock::time_point start);
     bool consistent_at(std::size_t pos);
+    bool check_holds(const Check& c) const;
+    Tri check_feasible(const Check& c) const;
+    std::size_t slot_for(const std::string& path);
     template <class OnSolution>
     void dfs(std::size_t pos, OnSolution& on_solution, bool& stop);
     double read(std::size_t var) const;
     void write(std::size_t var, double v);
-    std::vector<double> value_order(std::size_t var);
-    std::size_t violated_count();
+    const std::vector<double>& value_order(std::size_t var, std::size_t pos);
 
     value::Value work_;
     std::vector<Var> vars_;
@@ -104,11 +119,13 @@ private:
     std::vector<std::size_t> root_checks_;             // checks independent of decisions
     std::vector<bool> assigned_;
     std::map<std::string, std::size_t, std::less<>> var_by_path_;
+    std::vector<Slot> slots_;
+    std::map<std::string, std::size_t, std::less<>> slot_by_path_;
+    std::vector<double> hull_lo_, hull_hi_;            // per decision: domain bounds
+    std::vector<std::vector<double>> shuffle_buf_;     // per depth, when shuffling
     SynthesisOptions options_;
     SynthesisStats stats_;
     std::mt19937_64 rng_;
-
-    friend class SearchEnv;
 };
 
 }  // namespace combinatorial::problem

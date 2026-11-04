@@ -91,6 +91,53 @@ static void BM_QueensEnumerate(benchmark::State& st) {
 }
 BENCHMARK(BM_QueensEnumerate)->Arg(6)->Arg(8)->Unit(benchmark::kMillisecond);
 
+static void BM_MagicSquareEnumerate(benchmark::State& st) {
+    // all 8 3x3 magic squares: sums + all_different, heavy on interval pruning
+    using namespace problem;
+    value::TypeRegistry reg;
+    auto c = [](int r, int k) { return var("[" + std::to_string(r) + "," + std::to_string(k) + "]"); };
+    std::vector<Expr> cells;
+    for (int r = 0; r < 3; ++r)
+        for (int k = 0; k < 3; ++k) cells.push_back(c(r, k));
+    std::vector<Invariant> invs{Invariant(Constraint::all_different(cells))};
+    for (int i = 0; i < 3; ++i) {
+        invs.emplace_back(c(i, 0) + c(i, 1) + c(i, 2) == 15);
+        invs.emplace_back(c(0, i) + c(1, i) + c(2, i) == 15);
+    }
+    invs.emplace_back(c(0, 0) + c(1, 1) + c(2, 2) == 15);
+    invs.emplace_back(c(0, 2) + c(1, 1) + c(2, 0) == 15);
+    auto space = ConstrainedSpace::over_all_leaves("magic", reg.get("u8[3,3]"), Domain::range(1, 9), invs);
+    std::uint64_t nodes = 0;
+    for (auto _ : st) {
+        Synthesizer s = space->synthesizer();
+        benchmark::DoNotOptimize(s.count());
+        nodes += s.stats().nodes;
+    }
+    st.counters["states/s"] = benchmark::Counter(static_cast<double>(nodes), benchmark::Counter::kIsRate);
+}
+BENCHMARK(BM_MagicSquareEnumerate)->Unit(benchmark::kMillisecond);
+
+static void BM_MinConflictsQueens(benchmark::State& st) {
+    using namespace problem;
+    const auto n = static_cast<std::size_t>(st.range(0));
+    value::TypeRegistry reg;
+    std::vector<Invariant> invs;
+    for (std::size_t i = 0; i < n; ++i)
+        for (std::size_t j = i + 1; j < n; ++j) {
+            Expr a = var("[" + std::to_string(i) + "]"), b = var("[" + std::to_string(j) + "]");
+            const double d = static_cast<double>(j - i);
+            invs.emplace_back((a != b) && (a - b != d) && (b - a != d));
+        }
+    auto space = ConstrainedSpace::over_all_leaves("q", reg.get("u8[" + std::to_string(n) + "]"),
+                                                   Domain::range(0, static_cast<double>(n) - 1), invs);
+    std::uint64_t seed = 1;
+    for (auto _ : st) {
+        Synthesizer s = space->synthesizer(SynthesisOptions{.seed = seed++});
+        benchmark::DoNotOptimize(s.min_conflicts(100000));
+    }
+}
+BENCHMARK(BM_MinConflictsQueens)->Arg(16)->Arg(32)->Unit(benchmark::kMillisecond);
+
 namespace {
 std::vector<automaton::Example> poly_examples(const automaton::Machine& m) {
     std::vector<automaton::Example> ex;

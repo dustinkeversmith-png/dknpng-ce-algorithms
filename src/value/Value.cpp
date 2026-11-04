@@ -86,9 +86,11 @@ Value Value::reference_member(std::string_view member) const {
     return Value(f->type, memory_, offset_ + f->offset, std::string(member));
 }
 
-FieldIndex Value::locate(std::string_view path) const {
-    TypePtr cur = type_;
-    std::size_t off = offset_;
+FieldIndex Value::locate(std::string_view path) const { return value::locate(type_, path, offset_); }
+
+FieldIndex locate(const TypePtr& type, std::string_view path, std::size_t base) {
+    TypePtr cur = type;
+    std::size_t off = base;
     std::size_t pos = 0;
     const std::size_t n = path.size();
     bool expect_segment = true;

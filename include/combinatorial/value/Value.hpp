@@ -21,6 +21,10 @@
 
 namespace combinatorial::value {
 
+/// Resolves a reference path against a type (see Value::locate for the
+/// grammar). `base` is added to the resulting offset.
+FieldIndex locate(const TypePtr& type, std::string_view path, std::size_t base = 0);
+
 class Value {
 public:
     using Memory = std::vector<std::byte>;

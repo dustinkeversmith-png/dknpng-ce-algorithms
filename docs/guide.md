@@ -12,7 +12,9 @@ value::Value world(reg.get("Body[100]"));
 world.reference("[42].trail[3].y").set<double>(1.5);   // zero-copy path view
 value::Value body = world[42];                          // element view
 body.reference_member("pos").copy_from(body.reference("trail[3]"));
-auto sum = reg.apply("sum", {world[42].reference("trail")});  // throws: struct array
+value::Value xs(reg.get("f64[4]"));
+xs.from_vector<double>(std::vector<double>{1, 2, 3, 4});
+auto total = reg.apply("sum", {xs}).get<double>();       // 10
 ```
 
 ## Constraint problems
